@@ -124,13 +124,16 @@ def main(argv: list[str] | None = None) -> int:
         tls_host = os.environ.get("NAMECHEAP_FTP_TLS_HOST", "").strip()
 
         context = ssl.create_default_context()
+        if tls_host:
+            # Let the FTP alias select the correct virtual account while the
+            # trusted certificate is checked against the shared server name
+            # immediately after TLS is established.
+            context.check_hostname = False
         with ftplib.FTP_TLS(context=context, timeout=60) as ftp:
             ftp.connect(host, port)
-            # Shared cPanel can publish a customer FTP alias while its TLS
-            # certificate is issued to the server hostname. Keep certificate
-            # verification enabled by using that hostname only for TLS/SNI.
             if tls_host:
-                ftp.host = tls_host
+                ftp.auth()
+                ssl.match_hostname(ftp.sock.getpeercert(), tls_host)
             ftp.login(user, password)
             ftp.prot_p()
             ftp.set_pasv(True)
