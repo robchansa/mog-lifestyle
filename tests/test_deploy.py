@@ -451,26 +451,22 @@ class WorkflowTests(StoreTestCase):
         self.assertIn("github.ref == 'refs/heads/main'", self.text)
         self.assertIn("github.event_name != 'pull_request'", self.text)
 
-    def test_it_only_deploys_into_a_python_app_folder(self):
-        guard = self.text.index("test -f '$APP_PATH/passenger_wsgi.py'")
-        self.assertLess(guard, self.text.index("rsync"))
+    def test_it_uses_the_folder_limited_ftps_deployer(self):
+        self.assertIn("python tools/deploy_ftps.py dist/site", self.text)
+        for name in ("NAMECHEAP_FTP_HOST", "NAMECHEAP_FTP_USER",
+                     "NAMECHEAP_FTP_PASSWORD"):
+            self.assertIn(name, self.text)
+        self.assertNotIn("NAMECHEAP_SSH_KEY", self.text)
 
-    def test_mirroring_is_limited_to_code_folders(self):
-        mirrored = re.findall(r"rsync [^\n]*--delete[^\n]*\\\n\s*([^\n]+)", self.text)
-        self.assertEqual(len(mirrored), 1)
-        sources = mirrored[0].split('"')[0].split()
-        self.assertEqual(sources, ["dist/site/app", "dist/site/tools", "dist/site/docs"])
-        self.assertNotRegex(self.text, r"rsync[^\n]*\bdata\b")
-
-    def test_it_migrates_before_restarting_and_then_checks_health(self):
-        migrate = self.text.index("run.py --migrate")
-        restart = self.text.index("touch tmp/restart.txt")
-        self.assertLess(migrate, restart)
+    def test_it_restarts_and_then_checks_health(self):
+        deployer = (ROOT / "tools" / "deploy_ftps.py").read_text()
+        self.assertIn('ftp.prot_p()', deployer)
+        self.assertIn('STOR tmp/restart.txt', deployer)
+        self.assertIn('"passenger_wsgi.py", "BUILD.json"', deployer)
         self.assertIn('\\"build\\": \\"$want\\"', self.text)
 
-    def test_secrets_are_not_echoed_and_the_key_is_removed(self):
-        self.assertNotRegex(self.text, r"echo [^\n]*\$SSH_KEY")
-        self.assertIn("rm -f ~/.ssh/deploy_key", self.text)
+    def test_secrets_are_not_echoed(self):
+        self.assertNotRegex(self.text, r"echo [^\n]*FTP_PASSWORD")
         self.assertIn("permissions:\n  contents: read", self.text)
 
 

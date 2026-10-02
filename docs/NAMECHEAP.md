@@ -104,49 +104,40 @@ server is not a backup.
 After this, every `git push` to `main` runs the test suite and, if it passes,
 puts the new code live. A push that breaks a test never deploys.
 
-### 1. Turn on SSH
+### 1. Create a folder-limited deployment account
 
-cPanel → **SSH Access** (on some plans **Manage Shell**) → make sure SSH is
-enabled. Namecheap shared hosting uses **port 21098**. Your server's hostname
-is in cPanel's **General Information** panel (it looks like
-`server123.web-hosting.com`).
+cPanel → **FTP Accounts** → **Add FTP Account**:
 
-### 2. Make a deploy key
+| Field | Value |
+|---|---|
+| Log In | `deploy` |
+| Domain | the hosting account's available domain suffix |
+| Password | a new, unique generated password |
+| Directory | `/home/USER/moglifestyle` |
+| Quota | Unlimited |
 
-On your Mac:
+The directory restriction is important: GitHub can replace the application
+code, but it cannot read or change `~/mog-data`, other sites, email, or account
+settings. The workflow uses explicit FTPS, so the password and files are
+encrypted in transit.
 
-```bash
-ssh-keygen -t ed25519 -N "" -C "github-deploy" -f ~/.ssh/mog_deploy
-```
-
-cPanel → **SSH Access** → **Manage SSH Keys** → **Import Key** → name it
-`github-deploy`, paste the contents of `~/.ssh/mog_deploy.pub` → **Import** →
-back in the list click **Manage** → **Authorize**.
-
-Check it works from your Mac:
-
-```bash
-ssh -p 21098 -i ~/.ssh/mog_deploy USER@server123.web-hosting.com "ls moglifestyle"
-```
-
-### 3. Give GitHub the details
+### 2. Give GitHub the details
 
 GitHub → the `mog-lifestyle` repository → **Settings** → **Secrets and
 variables** → **Actions** → **New repository secret**, once for each:
 
 | Secret | Value |
 |---|---|
-| `NAMECHEAP_SSH_HOST` | `server123.web-hosting.com` (yours) |
-| `NAMECHEAP_SSH_PORT` | `21098` |
-| `NAMECHEAP_SSH_USER` | your cPanel username |
-| `NAMECHEAP_SSH_KEY` | the whole of `~/.ssh/mog_deploy` (the file **without** `.pub`) |
-| `NAMECHEAP_APP_PATH` | `/home/USER/moglifestyle` |
-| `NAMECHEAP_PYTHON` | `/home/USER/virtualenv/moglifestyle/3.11/bin/python` |
+| `NAMECHEAP_FTP_HOST` | the server hostname from cPanel, e.g. `server123.web-hosting.com` |
+| `NAMECHEAP_FTP_USER` | the complete login shown beside the new FTP account |
+| `NAMECHEAP_FTP_PASSWORD` | the generated deployment-account password |
 | `SITE_URL` | `https://moglifestyle.fit` |
 
-`pbcopy < ~/.ssh/mog_deploy` copies the private key to the clipboard.
+Port 21 and remote path `/` are the defaults. Only add
+`NAMECHEAP_FTP_PORT` or `NAMECHEAP_FTP_PATH` if the hosting account uses
+different values.
 
-### 4. Push
+### 3. Push
 
 ```bash
 git push
@@ -156,8 +147,9 @@ Watch it under the repository's **Actions** tab:
 
 1. **Tests** — the full suite. The upload zip is attached to the run as a
    download.
-2. **Deploy to Namecheap** — checks the target really is the app folder,
-   uploads the code, migrates the database, restarts the app.
+2. **Deploy to Namecheap** — connects over encrypted FTPS, verifies the
+   account is rooted at the app folder, mirrors the code and restarts Passenger.
+   The WSGI boot path applies idempotent database migrations before serving.
 3. **Health check** — waits until `https://moglifestyle.fit/healthz` reports the
    commit you just pushed. Green means it is live.
 
@@ -182,9 +174,9 @@ earlier successful run under **Actions** and choose **Re-run all jobs**.
 | Site works but every page says demo mode | `STRIPE_SECRET_KEY` is empty in `mog.env`. Restart after editing. |
 | Changes to `mog.env` don't apply | Settings are read at start-up: **Setup Python App → Restart**. |
 | Deploy job skipped with a notice | One of the secrets above is missing or misspelled. |
-| "has no passenger_wsgi.py" | `NAMECHEAP_APP_PATH` is wrong, or the Python app (Part 1, step 2) doesn't exist yet. |
-| `Permission denied (publickey)` | The key wasn't **Authorized** in cPanel, or the private key secret is incomplete — it must include the `BEGIN` and `END` lines. |
-| `rsync: command not found` | Rare on Namecheap. Ask support to enable it, or keep uploading the zip by hand (Part 1, step 3). |
+| "FTP root is not the MOG Python app folder" | The FTP account's directory is wrong, or the first upload has not been completed. It must be `/home/USER/moglifestyle`. |
+| `530 Login authentication failed` | `NAMECHEAP_FTP_USER` must be the complete login cPanel displays, and the GitHub password secret must match the FTP account. |
+| TLS or data-connection timeout | Confirm `NAMECHEAP_FTP_HOST` is the server hostname from cPanel and that FTP Access Control permits GitHub-hosted runners. |
 | Health check fails after a green deploy | The app didn't restart: **Setup Python App → Restart**, then open `/healthz`. |
 | Times in reports are off by hours | Set `MOG_TIMEZONE` to the store's timezone, e.g. `America/Boise`. |
 
