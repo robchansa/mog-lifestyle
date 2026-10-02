@@ -1,0 +1,881 @@
+{
+  "form": "HesMartech Client Project Intake Form",
+  "sections": [
+    {
+      "id": "header",
+      "title": "Header",
+      "fields": [
+        {
+          "id": "header_date",
+          "kind": "text",
+          "page": 1,
+          "label": "Project Intake Form",
+          "value": ""
+        }
+      ]
+    },
+    {
+      "id": "s1",
+      "title": "Website Management, Hosting & Domain",
+      "fields": [
+        {
+          "id": "s1_manage",
+          "kind": "radio",
+          "page": 1,
+          "label": "Who will manage your website? (content updates, text, pictures, products)",
+          "options": [
+            "We will do it ourselves",
+            "We want you to manage it",
+            "Someone else / Freelancer"
+          ],
+          "selected": "We want you to manage it"
+        },
+        {
+          "id": "s1_hosting",
+          "kind": "radio",
+          "page": 1,
+          "label": "Do you have a hosting platform?",
+          "options": [
+            "Yes, I have an account",
+            "No, please set one up",
+            "I am not sure / Need advice"
+          ],
+          "selected": "No, please set one up"
+        },
+        {
+          "id": "s1_domain",
+          "kind": "radio",
+          "page": 1,
+          "label": "Do you have a domain name? (e.g. yourbusiness.com)",
+          "options": [
+            "Yes, I already bought it",
+            "No, but I know what name",
+            "No, I need help buying one"
+          ],
+          "selected": "Yes, I already bought it"
+        },
+        {
+          "id": "s1_maintain",
+          "kind": "radio",
+          "page": 1,
+          "label": "Who will maintain your website? (technical fixes, security, backups)",
+          "options": [
+            "We want you to maintain it",
+            "We have our own IT person",
+            "We don't know yet / As needed"
+          ],
+          "selected": "We want you to maintain it"
+        }
+      ]
+    },
+    {
+      "id": "s2",
+      "title": "About You & Your Business",
+      "fields": [
+        {
+          "id": "s2_full_name",
+          "kind": "text",
+          "page": 1,
+          "label": "Full Name",
+          "value": "Robert Chansa"
+        },
+        {
+          "id": "s2_company",
+          "kind": "text",
+          "page": 1,
+          "label": "Business / Company Name",
+          "value": "moglifestyle"
+        },
+        {
+          "id": "s2_email",
+          "kind": "text",
+          "page": 1,
+          "label": "Email Address",
+          "value": "info@moglifestyle.fit"
+        },
+        {
+          "id": "s2_phone",
+          "kind": "text",
+          "page": 1,
+          "label": "Phone Number",
+          "value": "2082066706"
+        },
+        {
+          "id": "s2_industry",
+          "kind": "text",
+          "page": 1,
+          "label": "Industry / Business Type",
+          "value": ""
+        },
+        {
+          "id": "s2_website",
+          "kind": "text",
+          "page": 1,
+          "label": "Current Website (if any)",
+          "value": ""
+        },
+        {
+          "id": "s2_biz_desc",
+          "kind": "textarea",
+          "page": 1,
+          "label": "Briefly describe what your business does",
+          "value": "Sells fitness proiducts and clothing to a community of high achievers and health/ fitness lovers "
+        }
+      ]
+    },
+    {
+      "id": "s3",
+      "title": "Project Type",
+      "fields": [
+        {
+          "id": "s3_type_0",
+          "kind": "checkbox",
+          "page": 2,
+          "label": "Business / Corporate Website",
+          "checked": true
+        },
+        {
+          "id": "s3_type_1",
+          "kind": "checkbox",
+          "page": 2,
+          "label": "E-Commerce / Online Store",
+          "checked": true
+        },
+        {
+          "id": "s3_type_2",
+          "kind": "checkbox",
+          "page": 2,
+          "label": "Portfolio / Personal Website",
+          "checked": false
+        },
+        {
+          "id": "s3_type_3",
+          "kind": "checkbox",
+          "page": 2,
+          "label": "Web Application",
+          "checked": true
+        },
+        {
+          "id": "s3_type_4",
+          "kind": "checkbox",
+          "page": 2,
+          "label": "Mobile App (iOS / Android)",
+          "checked": false
+        },
+        {
+          "id": "s3_type_5",
+          "kind": "checkbox",
+          "page": 2,
+          "label": "Desktop Application",
+          "checked": false
+        },
+        {
+          "id": "s3_type_6",
+          "kind": "checkbox",
+          "page": 2,
+          "label": "Management System (ERP, CRM, etc.)",
+          "checked": false
+        },
+        {
+          "id": "s3_type_7",
+          "kind": "checkbox",
+          "page": 2,
+          "label": "API / Backend System",
+          "checked": false
+        },
+        {
+          "id": "s3_type_8",
+          "kind": "checkbox",
+          "page": 2,
+          "label": "Database System",
+          "checked": false
+        },
+        {
+          "id": "s3_type_9",
+          "kind": "checkbox",
+          "page": 2,
+          "label": "Other (specify below)",
+          "checked": false
+        },
+        {
+          "id": "s3_type_other",
+          "kind": "text",
+          "page": 2,
+          "label": "",
+          "value": ""
+        },
+        {
+          "id": "s3_status",
+          "kind": "radio",
+          "page": 2,
+          "label": "Is this a new project or an upgrade to an existing one?",
+          "options": [
+            "Brand new",
+            "Redesign / Upgrade",
+            "Adding features to existing"
+          ],
+          "selected": "Brand new"
+        },
+        {
+          "id": "s3_reason_1",
+          "kind": "text",
+          "page": 2,
+          "label": "If redesign/upgrade \u0097 what is the main reason for the change?",
+          "value": ""
+        },
+        {
+          "id": "s3_reason_2",
+          "kind": "text",
+          "page": 2,
+          "label": "If redesign/upgrade \u0097 what is the main reason for the change?",
+          "value": ""
+        }
+      ]
+    },
+    {
+      "id": "s4",
+      "title": "Goals & Purpose",
+      "fields": [
+        {
+          "id": "s4_main_goal",
+          "kind": "textarea",
+          "page": 2,
+          "label": "What is the main goal of this project?",
+          "value": "to sell products online"
+        },
+        {
+          "id": "s4_problem",
+          "kind": "textarea",
+          "page": 2,
+          "label": "What problem does this solve for your business or customers?",
+          "value": "provides customers with quality goods and services"
+        },
+        {
+          "id": "s4_success_1",
+          "kind": "text",
+          "page": 2,
+          "label": "How will you measure success? (What does a successful outcome look like?)",
+          "value": "number of visits and sale generated from those visits"
+        },
+        {
+          "id": "s4_success_2",
+          "kind": "text",
+          "page": 2,
+          "label": "How will you measure success? (What does a successful outcome look like?)",
+          "value": ""
+        }
+      ]
+    },
+    {
+      "id": "s5",
+      "title": "Target Audience & Users",
+      "fields": [
+        {
+          "id": "s5_who_1",
+          "kind": "text",
+          "page": 2,
+          "label": "Who will be using this website / application / system?",
+          "value": "general public"
+        },
+        {
+          "id": "s5_who_2",
+          "kind": "text",
+          "page": 2,
+          "label": "",
+          "value": ""
+        },
+        {
+          "id": "s5_age",
+          "kind": "text",
+          "page": 2,
+          "label": "Approximate age range of users",
+          "value": "16-85"
+        },
+        {
+          "id": "s5_geo",
+          "kind": "text",
+          "page": 2,
+          "label": "Geographic location of users",
+          "value": "usa"
+        },
+        {
+          "id": "s5_tech",
+          "kind": "radio",
+          "page": 2,
+          "label": "How tech-savvy are your users?",
+          "options": [
+            "Beginners",
+            "Intermediate",
+            "Advanced / Technical"
+          ],
+          "selected": "Intermediate"
+        },
+        {
+          "id": "s5_users",
+          "kind": "radio",
+          "page": 3,
+          "label": "Estimated number of users at launch",
+          "options": [
+            "Under 100",
+            "100 \u2013 1,000",
+            "1,000 \u2013 10,000",
+            "10,000+"
+          ],
+          "selected": null
+        }
+      ]
+    },
+    {
+      "id": "s6",
+      "title": "Features & Functionality",
+      "fields": [
+        {
+          "id": "s6_feat_0",
+          "kind": "checkbox",
+          "page": 3,
+          "label": "User registration / login",
+          "checked": true
+        },
+        {
+          "id": "s6_feat_1",
+          "kind": "checkbox",
+          "page": 3,
+          "label": "Admin dashboard / control panel",
+          "checked": true
+        },
+        {
+          "id": "s6_feat_2",
+          "kind": "checkbox",
+          "page": 3,
+          "label": "Payment / billing system",
+          "checked": true
+        },
+        {
+          "id": "s6_feat_3",
+          "kind": "checkbox",
+          "page": 3,
+          "label": "Shopping cart / e-commerce",
+          "checked": true
+        },
+        {
+          "id": "s6_feat_4",
+          "kind": "checkbox",
+          "page": 3,
+          "label": "Appointment / booking system",
+          "checked": false
+        },
+        {
+          "id": "s6_feat_5",
+          "kind": "checkbox",
+          "page": 3,
+          "label": "Search & filter functionality",
+          "checked": true
+        },
+        {
+          "id": "s6_feat_6",
+          "kind": "checkbox",
+          "page": 3,
+          "label": "Email notifications / alerts",
+          "checked": true
+        },
+        {
+          "id": "s6_feat_7",
+          "kind": "checkbox",
+          "page": 3,
+          "label": "SMS notifications",
+          "checked": false
+        },
+        {
+          "id": "s6_feat_8",
+          "kind": "checkbox",
+          "page": 3,
+          "label": "File uploads / document management",
+          "checked": false
+        },
+        {
+          "id": "s6_feat_9",
+          "kind": "checkbox",
+          "page": 3,
+          "label": "Reports & analytics dashboard",
+          "checked": false
+        },
+        {
+          "id": "s6_feat_10",
+          "kind": "checkbox",
+          "page": 3,
+          "label": "Chat / messaging system",
+          "checked": false
+        },
+        {
+          "id": "s6_feat_11",
+          "kind": "checkbox",
+          "page": 3,
+          "label": "Multi-language support",
+          "checked": false
+        },
+        {
+          "id": "s6_feat_12",
+          "kind": "checkbox",
+          "page": 3,
+          "label": "Map / location features",
+          "checked": false
+        },
+        {
+          "id": "s6_feat_13",
+          "kind": "checkbox",
+          "page": 3,
+          "label": "Social media integration",
+          "checked": true
+        },
+        {
+          "id": "s6_feat_14",
+          "kind": "checkbox",
+          "page": 3,
+          "label": "Blog / news / content management",
+          "checked": false
+        },
+        {
+          "id": "s6_feat_15",
+          "kind": "checkbox",
+          "page": 3,
+          "label": "API integration (third-party)",
+          "checked": false
+        },
+        {
+          "id": "s6_feat_16",
+          "kind": "checkbox",
+          "page": 3,
+          "label": "Inventory management",
+          "checked": true
+        },
+        {
+          "id": "s6_feat_17",
+          "kind": "checkbox",
+          "page": 3,
+          "label": "Role-based access (different user lev\u0085",
+          "checked": false
+        },
+        {
+          "id": "s6_other",
+          "kind": "textarea",
+          "page": 3,
+          "label": "Describe any other specific features or functionality you need",
+          "value": ""
+        },
+        {
+          "id": "s6_integr_1",
+          "kind": "text",
+          "page": 3,
+          "label": "Are there any third-party tools or services that must be integrated?",
+          "value": "stripe"
+        },
+        {
+          "id": "s6_integr_2",
+          "kind": "text",
+          "page": 3,
+          "label": "",
+          "value": ""
+        }
+      ]
+    },
+    {
+      "id": "s7",
+      "title": "Design & Appearance",
+      "fields": [
+        {
+          "id": "s7_brand",
+          "kind": "radio",
+          "page": 3,
+          "label": "Do you already have a brand identity? (logo, colors, fonts)",
+          "options": [
+            "Yes, fully branded",
+            "Partial (logo only)",
+            "No \u2014 need branding too"
+          ],
+          "selected": "No \u2014 need branding too"
+        },
+        {
+          "id": "s7_style_0",
+          "kind": "checkbox",
+          "page": 3,
+          "label": "Minimal & Clean",
+          "checked": false
+        },
+        {
+          "id": "s7_style_1",
+          "kind": "checkbox",
+          "page": 3,
+          "label": "Bold & Modern",
+          "checked": false
+        },
+        {
+          "id": "s7_style_2",
+          "kind": "checkbox",
+          "page": 3,
+          "label": "Professional / Corporate",
+          "checked": false
+        },
+        {
+          "id": "s7_style_3",
+          "kind": "checkbox",
+          "page": 3,
+          "label": "Creative / Playful",
+          "checked": false
+        },
+        {
+          "id": "s7_style_4",
+          "kind": "checkbox",
+          "page": 3,
+          "label": "Dark / Tech-themed",
+          "checked": false
+        },
+        {
+          "id": "s7_style_5",
+          "kind": "checkbox",
+          "page": 3,
+          "label": "Elegant / Luxury",
+          "checked": true
+        },
+        {
+          "id": "s7_colors",
+          "kind": "text",
+          "page": 3,
+          "label": "Preferred color palette",
+          "value": "black & white"
+        },
+        {
+          "id": "s7_colors_avoid",
+          "kind": "text",
+          "page": 3,
+          "label": "Colors to avoid",
+          "value": ""
+        },
+        {
+          "id": "s7_ref_1",
+          "kind": "text",
+          "page": 3,
+          "label": "List 2\u00963 websites or apps whose design you like and why",
+          "value": "blancc.com"
+        },
+        {
+          "id": "s7_ref_2",
+          "kind": "text",
+          "page": 4,
+          "label": "",
+          "value": ""
+        },
+        {
+          "id": "s7_ref_3",
+          "kind": "text",
+          "page": 4,
+          "label": "",
+          "value": ""
+        },
+        {
+          "id": "s7_plat_0",
+          "kind": "checkbox",
+          "page": 4,
+          "label": "Desktop (Web)",
+          "checked": true
+        },
+        {
+          "id": "s7_plat_1",
+          "kind": "checkbox",
+          "page": 4,
+          "label": "Mobile (Web)",
+          "checked": true
+        },
+        {
+          "id": "s7_plat_2",
+          "kind": "checkbox",
+          "page": 4,
+          "label": "iOS App",
+          "checked": false
+        },
+        {
+          "id": "s7_plat_3",
+          "kind": "checkbox",
+          "page": 4,
+          "label": "Android App",
+          "checked": false
+        },
+        {
+          "id": "s7_plat_4",
+          "kind": "checkbox",
+          "page": 4,
+          "label": "Windows App",
+          "checked": false
+        },
+        {
+          "id": "s7_plat_5",
+          "kind": "checkbox",
+          "page": 4,
+          "label": "Mac App",
+          "checked": false
+        },
+        {
+          "id": "s7_plat_6",
+          "kind": "checkbox",
+          "page": 4,
+          "label": "Tablet",
+          "checked": false
+        },
+        {
+          "id": "s7_plat_7",
+          "kind": "checkbox",
+          "page": 4,
+          "label": "All of the above",
+          "checked": false
+        }
+      ]
+    },
+    {
+      "id": "s8",
+      "title": "Content & Pages",
+      "fields": [
+        {
+          "id": "s8_pages",
+          "kind": "textarea",
+          "page": 4,
+          "label": "List the pages or sections you need",
+          "value": "home, shop, contact, cart"
+        },
+        {
+          "id": "s8_content",
+          "kind": "radio",
+          "page": 4,
+          "label": "Who will provide the content? (text, images, videos)",
+          "options": [
+            "I will provide it",
+            "HesMartech creates it",
+            "Mix of both"
+          ],
+          "selected": "Mix of both"
+        },
+        {
+          "id": "s8_cms",
+          "kind": "radio",
+          "page": 4,
+          "label": "Will you need to update content yourself after launch?",
+          "options": [
+            "Yes \u2014 I need a content management system (CMS)",
+            "No \u2014 HesMartech can manage updates"
+          ],
+          "selected": "No \u2014 HesMartech can manage updates"
+        },
+        {
+          "id": "s8_lang",
+          "kind": "text",
+          "page": 4,
+          "label": "Languages required",
+          "value": ""
+        }
+      ]
+    },
+    {
+      "id": "s9",
+      "title": "Technical Requirements",
+      "fields": [
+        {
+          "id": "s9_tech",
+          "kind": "text",
+          "page": 4,
+          "label": "Do you have a preferred technology or platform?",
+          "value": "suggest one"
+        },
+        {
+          "id": "s9_existing_1",
+          "kind": "text",
+          "page": 4,
+          "label": "Do you have existing systems this must connect to?",
+          "value": ""
+        },
+        {
+          "id": "s9_existing_2",
+          "kind": "text",
+          "page": 4,
+          "label": "",
+          "value": ""
+        },
+        {
+          "id": "s9_sec_0",
+          "kind": "checkbox",
+          "page": 4,
+          "label": "User data privacy (GDPR / POPIA)",
+          "checked": false
+        },
+        {
+          "id": "s9_sec_1",
+          "kind": "checkbox",
+          "page": 4,
+          "label": "SSL / HTTPS",
+          "checked": true
+        },
+        {
+          "id": "s9_sec_2",
+          "kind": "checkbox",
+          "page": 4,
+          "label": "Two-factor authentication (2FA)",
+          "checked": false
+        },
+        {
+          "id": "s9_sec_3",
+          "kind": "checkbox",
+          "page": 4,
+          "label": "PCI compliance (payments)",
+          "checked": false
+        },
+        {
+          "id": "s9_sec_4",
+          "kind": "checkbox",
+          "page": 4,
+          "label": "Regular backups",
+          "checked": false
+        },
+        {
+          "id": "s9_sec_5",
+          "kind": "checkbox",
+          "page": 4,
+          "label": "None / Not sure",
+          "checked": true
+        }
+      ]
+    },
+    {
+      "id": "s10",
+      "title": "Timeline & Budget",
+      "fields": [
+        {
+          "id": "s10_date",
+          "kind": "text",
+          "page": 4,
+          "label": "Desired launch / delivery date",
+          "value": ""
+        },
+        {
+          "id": "s10_flex",
+          "kind": "radio",
+          "page": 5,
+          "label": "Is this deadline flexible?",
+          "options": [
+            "Yes \u2014 flexible",
+            "No \u2014 fixed deadline"
+          ],
+          "selected": null
+        },
+        {
+          "id": "s10_budget",
+          "kind": "radio",
+          "page": 5,
+          "label": "Budget range (USD)",
+          "options": [
+            "Under $500",
+            "$500 \u2013 $1,500",
+            "$1,500 \u2013 $5,000",
+            "$5,000 \u2013 $15,000",
+            "$15,000 \u2013 $50,000",
+            "$50,000+"
+          ],
+          "selected": null
+        }
+      ]
+    },
+    {
+      "id": "s11",
+      "title": "Priority & Anything Else",
+      "fields": [
+        {
+          "id": "s11_rank_0",
+          "kind": "text",
+          "page": 5,
+          "label": "What is most important to you in this project?",
+          "value": ""
+        },
+        {
+          "id": "s11_rank_1",
+          "kind": "text",
+          "page": 5,
+          "label": "",
+          "value": ""
+        },
+        {
+          "id": "s11_rank_2",
+          "kind": "text",
+          "page": 5,
+          "label": "",
+          "value": ""
+        },
+        {
+          "id": "s11_rank_3",
+          "kind": "text",
+          "page": 5,
+          "label": "",
+          "value": ""
+        },
+        {
+          "id": "s11_rank_4",
+          "kind": "text",
+          "page": 5,
+          "label": "",
+          "value": ""
+        },
+        {
+          "id": "s11_heard",
+          "kind": "radio",
+          "page": 5,
+          "label": "How did you hear about HesMartech?",
+          "options": [
+            "Referral",
+            "Social Media",
+            "Google Search",
+            "Our Website",
+            "Advertisement",
+            "Other"
+          ],
+          "selected": null
+        },
+        {
+          "id": "s11_heard_other",
+          "kind": "text",
+          "page": 5,
+          "label": "",
+          "value": ""
+        },
+        {
+          "id": "s11_extra_1",
+          "kind": "textarea",
+          "page": 5,
+          "label": "Is there anything else we should know about your project?",
+          "value": ""
+        },
+        {
+          "id": "s11_extra_2",
+          "kind": "textarea",
+          "page": 5,
+          "label": "",
+          "value": ""
+        }
+      ]
+    },
+    {
+      "id": "sig",
+      "title": "Declaration",
+      "fields": [
+        {
+          "id": "sig_client",
+          "kind": "text",
+          "page": 5,
+          "label": "Client Signature",
+          "value": "Rob Chansa"
+        },
+        {
+          "id": "sig_date",
+          "kind": "text",
+          "page": 5,
+          "label": "Date",
+          "value": ""
+        }
+      ]
+    }
+  ]
+}

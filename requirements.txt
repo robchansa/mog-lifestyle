@@ -1,0 +1,10 @@
+# MOG Lifestyle has no third-party dependencies.
+#
+# Everything it needs ships with CPython 3.9+: http.server, sqlite3, hashlib,
+# hmac, secrets, smtplib, email, urllib, json, unittest.
+#
+#   python3 run.py --seed
+#   python3 tests/run_tests.py
+#
+# This file exists so the absence of dependencies is explicit rather than an
+# oversight.  If you ever add one, add it here and update docs/DEPLOYMENT.md.
