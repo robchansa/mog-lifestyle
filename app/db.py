@@ -117,6 +117,9 @@ def update(table: str, where: str, params: Sequence[Any], **values: Any) -> int:
 ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     ("products", "images", "TEXT NOT NULL DEFAULT ''"),
     ("collections", "department", "TEXT NOT NULL DEFAULT 'general'"),
+    ("orders", "refunded_at", "TEXT"),
+    ("order_items", "department", "TEXT NOT NULL DEFAULT ''"),
+    ("order_items", "on_sale", "INTEGER NOT NULL DEFAULT 0"),
 )
 
 
@@ -129,24 +132,90 @@ def migrate() -> None:
     Both passes are idempotent.
     """
     conn = connect()
-    _apply_column_migrations(conn)
+    added = _apply_column_migrations(conn)
     conn.executescript(SCHEMA_PATH.read_text())
-    _apply_column_migrations(conn)
+    added |= _apply_column_migrations(conn)
+    if ("order_items", "department") in added:
+        backfill_order_item_categories(conn)
+    if not conn.execute("SELECT 1 FROM visits LIMIT 1").fetchone():
+        rebuild_visits(conn)
     _rebuild_fts_if_empty(conn)
 
 
-def _apply_column_migrations(conn: sqlite3.Connection) -> None:
+def _apply_column_migrations(conn: sqlite3.Connection) -> set[tuple[str, str]]:
+    added: set[tuple[str, str]] = set()
     for table, column, definition in ADDED_COLUMNS:
-        _ensure_column(conn, table, column, definition)
+        if _ensure_column(conn, table, column, definition):
+            added.add((table, column))
+    return added
 
 
 def _ensure_column(conn: sqlite3.Connection, table: str, column: str,
-                   definition: str) -> None:
+                   definition: str) -> bool:
+    """Add the column if it is missing.  True when it was just added."""
     columns = list(conn.execute(f"PRAGMA table_info({table})"))
     if not columns:
-        return                      # table does not exist yet
-    if column not in {row["name"] for row in columns}:
+        return False                # table does not exist yet
+    if column in {row["name"] for row in columns}:
+        return False
+    try:
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+    except sqlite3.OperationalError as exc:
+        # Several web workers booting at once can race to add the same column;
+        # whoever loses finds it already there, which is the goal.
+        if "duplicate column" in str(exc).lower():
+            return False
+        raise
+    return True
+
+
+def backfill_order_item_categories(conn: sqlite3.Connection | None = None) -> int:
+    """Attribute orders placed before the snapshot columns existed.
+
+    New lines record their department and markdown at checkout.  Older lines
+    are matched to the product they came from -- by variant, or by slug when the
+    variant has since been deleted -- and take its current department and sale
+    state, which is the best evidence left.  Lines whose product is gone stay
+    blank and are reported as "Unassigned" rather than guessed.
+    """
+    conn = conn or connect()
+    product_for_line = (
+        "COALESCE("
+        " (SELECT v.product_id FROM variants v WHERE v.id = order_items.variant_id),"
+        " (SELECT p.id FROM products p WHERE p.slug = order_items.slug))"
+    )
+    cur = conn.execute(
+        f"UPDATE order_items SET "
+        f" department = COALESCE((SELECT c.department FROM products p "
+        f"   JOIN collections c ON c.id = p.collection_id "
+        f"   WHERE p.id = {product_for_line}), ''), "
+        f" on_sale = COALESCE((SELECT p.compare_cents IS NOT NULL "
+        f"   AND p.compare_cents > order_items.unit_cents FROM products p "
+        f"   WHERE p.id = {product_for_line}), 0) "
+        f"WHERE department = ''"
+    )
+    return cur.rowcount
+
+
+def rebuild_visits(conn: sqlite3.Connection | None = None) -> int:
+    """Derive per-visitor-day rows from raw page views.
+
+    Runs once when the `visits` table first appears on a database that already
+    has traffic, and after bulk imports.  Existing visits are left untouched.
+    """
+    conn = conn or connect()
+    cur = conn.execute(
+        "INSERT OR IGNORE INTO visits (visitor, started_at, views, device, referrer, "
+        "  entry_path, saw_product, saw_cart, saw_checkout) "
+        "SELECT pv.visitor, MIN(pv.created_at), count(*), MAX(pv.device), "
+        "  COALESCE((SELECT r.referrer FROM page_views r WHERE r.visitor = pv.visitor "
+        "            AND r.referrer <> '' ORDER BY r.id LIMIT 1), ''), "
+        "  (SELECT e.path FROM page_views e WHERE e.visitor = pv.visitor "
+        "   ORDER BY e.id LIMIT 1), "
+        "  MAX(pv.kind = 'product'), MAX(pv.kind = 'cart'), MAX(pv.kind = 'checkout') "
+        "FROM page_views pv GROUP BY pv.visitor"
+    )
+    return cur.rowcount
 
 
 def _rebuild_fts_if_empty(conn: sqlite3.Connection) -> None:

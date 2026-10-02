@@ -85,6 +85,7 @@ def create_from_cart(cart: cart_module.Cart, *, email: str, user_id: int | None,
                 sku=line.sku, title=line.title, variant_label=line.variant_label,
                 slug=line.slug, art_seed=line.art_seed,
                 unit_cents=line.unit_cents, quantity=line.quantity,
+                department=line.department, on_sale=1 if line.on_sale else 0,
             )
 
     audit("order.create", actor=email, subject=number,
@@ -253,7 +254,8 @@ def refund(order: sqlite3.Row, *, actor: str = "system",
         except stripe_api.StripeError as exc:
             raise CheckoutError(f"Stripe refused the refund: {exc}") from exc
     with db.tx():
-        db.update("orders", "id = ?", (order["id"],), status="refunded")
+        db.update("orders", "id = ?", (order["id"],), status="refunded",
+                  refunded_at=_now())
         if restock_items:
             for item in items_for(order["id"]):
                 if item["variant_id"]:

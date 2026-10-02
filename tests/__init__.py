@@ -14,6 +14,8 @@ _TMP = Path(tempfile.mkdtemp(prefix="mog-tests-"))
 
 os.environ.setdefault("MOG_ENV", "test")
 os.environ.setdefault("MOG_DB", str(_TMP / "test.sqlite3"))
+# Never read a real ~/mog-data/mog.env, here or in any subprocess a test runs.
+os.environ["MOG_ENV_FILE"] = str(_TMP / "no-such-env-file")
 os.environ.setdefault("MOG_SECRET_KEY", "test-secret-key-not-for-production")
 # Same KDF, far fewer rounds: keeps the suite fast without changing behaviour.
 os.environ.setdefault("MOG_PBKDF2_ROUNDS", "1000")

@@ -188,6 +188,7 @@ class AnalyticsTests(StoreTestCase):
         self.assertEqual(analytics.device_class("Macintosh Safari"), "desktop")
 
     def test_the_funnel_reports_the_metric_the_brief_asked_for(self):
+        from app import reports
         for index in range(5):
             ip = f"203.0.113.{100 + index}"
             analytics.record("/", ip=ip, user_agent="Mozilla/5.0")
@@ -195,12 +196,39 @@ class AnalyticsTests(StoreTestCase):
                 analytics.record("/product/x", ip=ip, user_agent="Mozilla/5.0")
             if index < 2:
                 analytics.record("/cart", ip=ip, user_agent="Mozilla/5.0")
-        stats = analytics.summary(30)
-        self.assertEqual(stats["visitors"], 5)
-        labels = dict(stats["funnel"])
+        window = reports.Window(reports.resolve({"range": "7d"}))
+        labels = dict(reports.funnel(window, orders=1))
         self.assertEqual(labels["Visited"], 5)
         self.assertEqual(labels["Viewed a product"], 3)
         self.assertEqual(labels["Opened the bag"], 2)
+        self.assertEqual(labels["Ordered"], 1)
+
+    def test_each_visitor_day_is_one_visit_row(self):
+        for path in ("/", "/shop", "/product/x", "/cart"):
+            analytics.record(path, ip="203.0.113.50", user_agent="Mozilla/5.0",
+                             referrer="https://l.instagram.com/?u=x")
+        visit = db.one("SELECT * FROM visits")
+        self.assertEqual(db.scalar("SELECT count(*) FROM visits"), 1)
+        self.assertEqual(visit["views"], 4)
+        self.assertEqual(visit["referrer"], "l.instagram.com")
+        self.assertEqual(visit["entry_path"], "/")
+        self.assertEqual((visit["saw_product"], visit["saw_cart"], visit["saw_checkout"]),
+                         (1, 1, 0))
+
+    def test_clicks_within_the_store_are_not_counted_as_referrals(self):
+        analytics.record("/shop", ip="203.0.113.51", user_agent="Mozilla/5.0",
+                         referrer="https://moglifestyle.fit/", host="moglifestyle.fit")
+        self.assertEqual(db.scalar("SELECT referrer FROM page_views"), "")
+        self.assertEqual(db.scalar("SELECT referrer FROM visits"), "")
+
+    def test_visits_are_rebuilt_from_page_views_for_older_databases(self):
+        for path in ("/", "/product/x"):
+            analytics.record(path, ip="203.0.113.52", user_agent="Mozilla/5.0")
+        with db.tx():
+            db.execute("DELETE FROM visits")
+        self.assertEqual(db.rebuild_visits(), 1)
+        visit = db.one("SELECT * FROM visits")
+        self.assertEqual((visit["views"], visit["saw_product"]), (2, 1))
 
     def test_old_rows_are_pruned(self):
         analytics.record("/", ip="203.0.113.5", user_agent="Mozilla/5.0")
@@ -208,6 +236,11 @@ class AnalyticsTests(StoreTestCase):
             db.execute("UPDATE page_views SET created_at = datetime('now', '-500 days')")
         self.assertEqual(analytics.prune(400), 1)
         self.assertEqual(db.scalar("SELECT count(*) FROM page_views", (), 0), 0)
+        # The visit row goes with it once it ages out too.
+        with db.tx():
+            db.execute("UPDATE visits SET started_at = datetime('now', '-500 days')")
+        analytics.prune(400)
+        self.assertEqual(db.scalar("SELECT count(*) FROM visits", (), 0), 0)
 
     def test_recording_never_raises(self):
         analytics.record("/", ip="", user_agent="")           # no UA at all

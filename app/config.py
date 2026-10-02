@@ -9,6 +9,8 @@ from __future__ import annotations
 import os
 import secrets
 from dataclasses import dataclass, field
+from datetime import datetime, timezone, tzinfo
+from functools import lru_cache
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -28,6 +30,15 @@ def _int(name: str, default: int) -> int:
         return int(os.environ.get(name, default))
     except (TypeError, ValueError):
         return default
+
+
+@lru_cache(maxsize=8)
+def _load_zone(name: str) -> tzinfo | None:
+    try:
+        from zoneinfo import ZoneInfo
+        return ZoneInfo(name)
+    except Exception:                                          # noqa: BLE001
+        return None              # unknown name, or no tz database installed
 
 
 @dataclass
@@ -50,6 +61,12 @@ class Config:
         default_factory=lambda: _bool("MOG_SECURE_COOKIES", False)
     )
     force_https: bool = field(default_factory=lambda: _bool("MOG_FORCE_HTTPS", False))
+    # Staff and admin sessions end this many hours after sign-in, however
+    # active they are.  The console shows revenue and customer records, so a
+    # forgotten tab on a shared machine should not stay signed in for a month.
+    admin_session_hours: int = field(
+        default_factory=lambda: _int("MOG_ADMIN_SESSION_HOURS", 12)
+    )
 
     # -- storefront ------------------------------------------------------
     store_name: str = "MOG Lifestyle"
@@ -67,6 +84,11 @@ class Config:
         default_factory=lambda: _int("MOG_FREE_SHIPPING_CENTS", 15000)
     )
     tax_rate_bps: int = field(default_factory=lambda: _int("MOG_TAX_BPS", 0))
+    # Reports group sales into the store's own days, not UTC ones.  The default
+    # follows the store phone number's 208 area code (Idaho, Mountain Time).
+    timezone: str = field(
+        default_factory=lambda: os.environ.get("MOG_TIMEZONE", "America/Boise")
+    )
 
     # -- payments --------------------------------------------------------
     stripe_secret_key: str = field(
@@ -129,6 +151,18 @@ class Config:
     @property
     def email_live(self) -> bool:
         return bool(self.smtp_host)
+
+    @property
+    def zone(self) -> tzinfo:
+        """The store's timezone, falling back to UTC if it cannot be loaded."""
+        return _load_zone(self.timezone) or timezone.utc
+
+    @property
+    def zone_is_valid(self) -> bool:
+        return _load_zone(self.timezone) is not None
+
+    def local_now(self) -> datetime:
+        return datetime.now(timezone.utc).astimezone(self.zone)
 
     def url(self, path: str = "/") -> str:
         return f"{self.base_url}{path if path.startswith('/') else '/' + path}"

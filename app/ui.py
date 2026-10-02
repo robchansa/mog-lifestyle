@@ -14,7 +14,7 @@ from typing import Any, Iterable, Mapping, Sequence
 
 from .catalog import image_list
 from .config import config
-from .web import Request
+from .web import Request, static_url
 
 __all__ = [
     "E", "attrs", "money", "layout", "page_header", "button", "field",
@@ -315,7 +315,7 @@ def layout(request: Request, content: str, *, title: str = "",
         if json_ld else ""
     )
     extra_scripts = "".join(
-        f'<script src="{E(src)}" defer></script>' for src in scripts
+        f'<script src="{E(static_url(src))}" defer></script>' for src in scripts
     )
     return f"""<!doctype html>
 <html lang="en">
@@ -337,9 +337,9 @@ def layout(request: Request, content: str, *, title: str = "",
 <meta name="twitter:title" content="{E(full_title)}">
 <meta name="twitter:description" content="{E(description)}">
 <meta name="twitter:image" content="{E(image)}">
-<link rel="icon" href="/static/brand/favicon.png" type="image/png">
-<link rel="apple-touch-icon" href="/static/brand/favicon.png">
-<link rel="stylesheet" href="/static/css/site.css">
+<link rel="icon" href="{E(static_url("/static/brand/favicon.png"))}" type="image/png">
+<link rel="apple-touch-icon" href="{E(static_url("/static/brand/favicon.png"))}">
+<link rel="stylesheet" href="{E(static_url("/static/css/site.css"))}">
 {structured}
 </head>
 <body class="{E(body_class)}">
@@ -347,7 +347,7 @@ def layout(request: Request, content: str, *, title: str = "",
 {flash_markup}
 <main id="main" tabindex="-1">{content}</main>
 {site_footer(request) if chrome else ""}
-<script src="/static/js/site.js" defer></script>
+<script src="{E(static_url("/static/js/site.js"))}" defer></script>
 {extra_scripts}
 </body>
 </html>
@@ -532,14 +532,22 @@ def pagination(page: int, pages: int, base: str) -> str:
 
 
 def table(headers: Sequence[str], rows: Iterable[Sequence[str]], *,
-          empty: str = "Nothing here yet.", caption: str = "") -> str:
+          empty: str = "Nothing here yet.", caption: str = "",
+          numeric: Iterable[int] = ()) -> str:
+    """A data table.  Columns listed in `numeric` are right-aligned, header
+    included, so figures line up by place value."""
+    numeric = set(numeric)
+
+    def cls(index: int) -> str:
+        return ' class="num"' if index in numeric else ""
+
     body = "".join(
-        "<tr>" + "".join(f"<td>{cell}</td>" for cell in row) + "</tr>"
+        "<tr>" + "".join(f"<td{cls(i)}>{cell}</td>" for i, cell in enumerate(row)) + "</tr>"
         for row in rows
     )
     if not body:
         return f'<p class="muted table-empty">{E(empty)}</p>'
-    head = "".join(f"<th scope='col'>{E(h)}</th>" for h in headers)
+    head = "".join(f"<th scope='col'{cls(i)}>{E(h)}</th>" for i, h in enumerate(headers))
     cap = f"<caption>{E(caption)}</caption>" if caption else ""
     return f"""
 <div class="table-wrap">
@@ -550,27 +558,31 @@ def table(headers: Sequence[str], rows: Iterable[Sequence[str]], *,
 
 # ------------------------------------------------------------------- admin
 
+# (href, label, roles that see it).  The route guards are what enforce access;
+# this only keeps staff from being shown a link that would refuse them.
 ADMIN_NAV = [
-    ("/admin", "Overview"),
-    ("/admin/traffic", "Traffic"),
-    ("/admin/orders", "Orders"),
-    ("/admin/products", "Products"),
-    ("/admin/inventory", "Inventory"),
-    ("/admin/customers", "Customers"),
-    ("/admin/discounts", "Discounts"),
-    ("/admin/messages", "Messages"),
-    ("/admin/email", "Email log"),
-    ("/admin/activity", "Activity"),
+    ("/admin", "Overview", ("staff", "admin")),
+    ("/admin/analytics", "Analytics", ("admin",)),
+    ("/admin/orders", "Orders", ("staff", "admin")),
+    ("/admin/products", "Products", ("staff", "admin")),
+    ("/admin/inventory", "Inventory", ("staff", "admin")),
+    ("/admin/customers", "Customers", ("staff", "admin")),
+    ("/admin/discounts", "Discounts", ("staff", "admin")),
+    ("/admin/messages", "Messages", ("staff", "admin")),
+    ("/admin/email", "Email log", ("staff", "admin")),
+    ("/admin/activity", "Activity", ("staff", "admin")),
 ]
 
 
 def admin_layout(request: Request, content: str, *, title: str,
                  active: str = "", actions: str = "") -> str:
+    role = request.user["role"] if request.user else ""
     links = "".join(
         f'<a href="{E(href)}" class="admin-nav__link'
         f'{" is-active" if href == active else ""}"'
         f'{attrs(aria_current="page" if href == active else None)}>{E(label)}</a>'
-        for href, label in ADMIN_NAV
+        for href, label, roles in ADMIN_NAV
+        if role in roles
     )
     user = request.user
     body = f"""

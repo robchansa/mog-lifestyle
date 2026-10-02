@@ -107,7 +107,7 @@ minutes. Your admin stock counts are true.
 
 ## 5 · Quality
 
-372 automated tests cover the domain logic, the HTTP layer and complete customer
+493 automated tests cover the domain logic, the HTTP layer and complete customer
 journeys against a real server — including a full guest purchase, CSRF
 rejection, and admin access control.
 

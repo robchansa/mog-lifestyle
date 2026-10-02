@@ -7,21 +7,20 @@ updates. The domain is already owned. This is that runbook.
 
 ## 0 · Before anything else
 
-Change the seeded staff password. The demo account is
-`info@moglifestyle.fit` / `mog-admin-2026` and is public knowledge — it is in
-this repository.
+**On Namecheap shared hosting?** Follow [NAMECHEAP.md](NAMECHEAP.md) instead —
+it covers the cPanel Python app, the upload zip and automatic deploys from
+GitHub. This file is the VPS route.
+
+The development admin (`info@moglifestyle.fit` / `mog-admin-2026`) is printed
+in the README, so production will not create it. Make the first administrator
+on the server — you are prompted for the password:
 
 ```bash
-python3 - <<'EOF'
-import sys; sys.path.insert(0, '.')
-from app import db; from app.security import hash_password
-db.migrate()
-with db.tx():
-    db.update("users", "email = ?", ("info@moglifestyle.fit",),
-              password_hash=hash_password("<a long passphrase>"))
-print("staff password rotated")
-EOF
+python3 run.py --create-admin info@moglifestyle.fit
 ```
+
+Running it again for an existing account resets its password, unlocks it and
+signs out every session it had.
 
 ---
 
@@ -186,6 +185,10 @@ messages are kept with their error and can be retried from that page.
 ---
 
 ## 8 · Backups
+
+`python3 run.py --backup /var/backups/mog` does all of the below in one step
+(online backup, gzip, keep the newest 14, owner-only permissions) and reads the
+same settings as the site. The manual equivalent:
 
 The database is one file. Use SQLite's online backup so you never copy a
 half-written page:

@@ -67,10 +67,18 @@ python3 run.py --seed           # create the demo catalogue first
 python3 run.py --reset --seed   # wipe and rebuild the database
 python3 run.py --port 9000
 python3 run.py --check          # migrate, seed, self-test the routes, exit
+python3 run.py --demo-history   # ~13 months of sample sales & traffic for Analytics
+python3 run.py --demo-history clear
+python3 run.py --migrate        # schema up to date, exit (deploys run this)
+python3 run.py --create-admin you@example.com   # add or reset an administrator
+python3 run.py --backup ~/mog-data/backups      # consistent gzipped DB copy
+python3 tools/package.py        # the zip to upload to Namecheap
 ```
 
-Seeded staff login: **`info@moglifestyle.fit` / `mog-admin-2026`** — change it
-before deploying (see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)).
+Development admin login: **`info@moglifestyle.fit` / `mog-admin-2026`**.
+It exists only outside production: with `MOG_ENV=production` the seed refuses
+it and the first admin comes from `--create-admin` (see
+[`docs/NAMECHEAP.md`](docs/NAMECHEAP.md)).
 
 ### Demo mode
 
@@ -85,7 +93,7 @@ console and are still recorded in the outbox.
 ## Tests
 
 ```bash
-python3 tests/run_tests.py       # 372 tests, ~10 seconds
+python3 tests/run_tests.py       # 493 tests, ~18 seconds
 python3 tests/run_tests.py -v
 python3 tests/run_tests.py test_orders.py
 ```
@@ -104,6 +112,8 @@ python3 tests/run_tests.py test_orders.py
 | `test_assets.py` | Brand assets, image resolution, PNG pipeline, migrations |
 | `test_departments.py` | Taxonomy, nav menus, scroll hero, homepage bands |
 | `test_launch.py` | Spam traps, analytics privacy, HTTPS, cookie policy |
+| `test_analytics.py` | Periods, store-local time and DST, every sales figure, category attribution, charts, admin-only access, export |
+| `test_deploy.py` | The WSGI adapter, env file, packaging, production seeding, the GitHub workflow |
 | `test_frontend.py` | Mobile nav, accessibility, progressive enhancement |
 | `test_integration.py` | Full journeys over real HTTP, with cookies and CSRF |
 | `test_brief.py` | The signed PDF, asserted against the running code |
@@ -117,7 +127,9 @@ cross-origin rejection, admin access control, CSV export, fulfilment.
 ## Layout
 
 ```
-run.py                  entry point — serve, seed, reset, self-check
+run.py                  entry point — serve, seed, migrate, admin, backup
+passenger_wsgi.py       entry point for Namecheap / cPanel (Passenger)
+.github/workflows/      test every push; deploy main to Namecheap
 app/
   config.py             environment-driven settings, safe local defaults
   db.py                 SQLite: per-thread connections, tx(), migrations
@@ -134,8 +146,13 @@ app/
   orders.py             order lifecycle and reporting
   stripe_api.py         dependency-free Stripe client and webhook verifier
   mailer.py             outbox-backed transactional email
-  views_*.py            storefront, account, checkout, admin
+  views_*.py            storefront, account, checkout, admin, analytics
   analytics.py          first-party cookieless traffic measurement
+  reports.py            sales/customer/traffic reporting in store-local time
+  charts.py             server-rendered SVG charts with accessible tables
+  demo.py               tagged, removable sample history (never production)
+  wsgi.py               WSGI adapter for Passenger and other WSGI hosts
+  envfile.py            private KEY=value settings file outside the code
   seed.py               demo catalogue and staff user
   static/               css, js, brand assets, photography
 tools/
@@ -143,8 +160,9 @@ tools/
   build_assets.py       source artwork → site assets (logo masks, crops)
   pngkit.py             pure-Python PNG decode/encode/crop/alpha
   audit.py              pre-launch crawler: SEO, a11y, contrast, dead links
+  package.py            reproducible deploy zip (no data, no secrets)
 docs/                   requirements, brand, architecture, deployment, proposal
-tests/                  372 tests
+tests/                  493 tests
 ```
 
 ---
@@ -256,7 +274,55 @@ the newsletter all work with JavaScript disabled; JS only removes page reloads.
 - [`docs/PROPOSAL.md`](docs/PROPOSAL.md) — scope, assumptions, and what comes next
 - [`docs/BRAND.md`](docs/BRAND.md) — the identity built for the "need branding too" answer
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — how the pieces fit together
-- [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — going live on moglifestyle.fit
+- [`docs/NAMECHEAP.md`](docs/NAMECHEAP.md) — Namecheap hosting and automatic deploys from GitHub
+- [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — going live on a VPS instead
+
+## Analytics
+
+**Admin → Analytics** (`/admin/analytics`) is for administrators only — staff
+accounts run the console but are refused, and are not shown the link.
+Anonymous visitors are sent to sign in and brought back.
+
+- **Summary cards** — revenue, orders, average order, units, visitors, page
+  views, conversion, new customers — each with its change against the
+  previous period and a trend line. Click one to chart it.
+- **Ranges** 7/30/90 days, 12 months, year to date, all time, or any dates;
+  grouped **daily, weekly, monthly or yearly**. Every view is a plain URL, so
+  it can be bookmarked or shared with another admin.
+- **Sales by category** — Men, Women and Everyone (which add up to all product
+  sales) and Sale (which cuts across them), with department mix over time.
+  Click a category to filter the best sellers.
+- **Best-selling products**, **sales summary** (gross → discounts → net →
+  shipping → tax → revenue, refunds shown separately), **customer growth**
+  (accounts, first-time vs returning buyers, repeat rate), the **conversion
+  funnel**, **visitors & page views** with top pages, sources and devices,
+  **recent orders** and a **sales activity** feed.
+- **Export CSV** of the current view (audited, spreadsheet-formula safe).
+
+Numbers are reported in the store's own calendar (`MOG_TIMEZONE`, default
+`America/Boise`) including across daylight-saving changes. Each order line
+records its department and markdown at checkout, so editing the catalogue
+never rewrites past reports. Traffic is summarised per visitor-day as it is
+recorded, so a year of it reports in milliseconds. Charts are SVG rendered on
+the server with a data table behind each one for screen readers; there is no
+charting library and no inline script.
+
+Try it locally with `python3 run.py --demo-history`, which writes 13 months of
+realistic, clearly tagged sample trade; `--demo-history clear` removes exactly
+that and nothing else.
+
+## Hosting & deploys
+
+Namecheap shared hosting runs the store through cPanel's **Setup Python App**
+(`passenger_wsgi.py`). `python3 tools/package.py` builds the upload zip —
+code only: never the database, a secret, the tests or the intake form.
+
+Once the GitHub secrets are set, **every push to `main` deploys itself**:
+GitHub Actions runs the whole test suite, uploads the code over SSH, migrates
+the database, restarts the app and waits for `/healthz` to report the new
+commit. A push that fails a test never reaches the site. Settings and the
+database live in `~/mog-data`, which no deploy touches. Step by step:
+[`docs/NAMECHEAP.md`](docs/NAMECHEAP.md).
 
 ## Pre-launch audit
 

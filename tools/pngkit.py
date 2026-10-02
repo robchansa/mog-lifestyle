@@ -183,3 +183,30 @@ def alpha_row_gaps(image: Image, threshold: int = 24) -> list[tuple[int, int]]:
 
 def _luminance(r: int, g: int, b: int) -> float:
     return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def jpeg_size(data: bytes) -> tuple[int, int]:
+    """(width, height) of a JPEG, read from its start-of-frame marker.
+
+    Pure Python, so checks that need image dimensions run anywhere -- the CI
+    runner included -- not only where macOS's `sips` exists.
+    """
+    if data[:2] != b"\xff\xd8":
+        raise ValueError("not a JPEG")
+    index = 2
+    while index + 4 <= len(data):
+        if data[index] != 0xFF:
+            index += 1
+            continue
+        marker = data[index + 1]
+        if marker in (0xD8, 0x01) or 0xD0 <= marker <= 0xD7:   # no length field
+            index += 2
+            continue
+        length = int.from_bytes(data[index + 2:index + 4], "big")
+        # SOF0..SOF15, except DHT (C4), JPG (C8) and DAC (CC).
+        if 0xC0 <= marker <= 0xCF and marker not in (0xC4, 0xC8, 0xCC):
+            height = int.from_bytes(data[index + 5:index + 7], "big")
+            width = int.from_bytes(data[index + 7:index + 9], "big")
+            return width, height
+        index += 2 + length
+    raise ValueError("no frame header found")

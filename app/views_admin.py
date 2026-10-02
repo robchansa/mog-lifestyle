@@ -8,26 +8,102 @@ from __future__ import annotations
 
 import csv
 import io
+import re
+import urllib.parse
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from . import accounts, analytics, catalog, db, discounts, mailer, orders
+from . import accounts, catalog, db, discounts, mailer, orders
 from .config import config
 from .security import audit, slugify
 from .ui import (
     E, admin_layout, badge, button, csrf_input, field, money, table,
 )
 from .web import (
-    HttpError, Request, Response, Router, html_response, redirect, Response as Resp,
+    HttpError, Redirect, Request, Response, Router, html_response, redirect,
+    Response as Resp,
 )
 
 router = Router()
 
 
+# ------------------------------------------------------------------ access
+
+def _sign_in_url(request: Request) -> str:
+    # Only a GET can be replayed after signing in; a POST lands on the console.
+    target = request.url_for_self() if request.method in ("GET", "HEAD") else "/admin"
+    return "/login?" + urllib.parse.urlencode({"next": target})
+
+
 def require_staff(request: Request):
+    """Staff or admin, signed in within the last `admin_session_hours`.
+
+    Anonymous visitors are sent to sign in and brought back afterwards;
+    signed-in customers get a 403.
+    """
     user = request.user
-    if user is None or user["role"] not in ("staff", "admin"):
+    if user is None:
+        raise Redirect(_sign_in_url(request))
+    if user["role"] not in ("staff", "admin"):
         raise HttpError(403, "Staff access only.")
+    _enforce_session_age(request, user)
     return user
+
+
+def require_admin(request: Request):
+    """Administrators only: revenue and customer analytics are not staff tools."""
+    user = require_staff(request)
+    if user["role"] != "admin":
+        raise HttpError(403, "Analytics is limited to administrators.")
+    return user
+
+
+def _enforce_session_age(request: Request, user: Any) -> None:
+    """End a privileged session a fixed time after sign-in, however busy.
+
+    Customer sessions last `session_days`; a console session showing revenue
+    and customer records should not.  Fails closed: a session whose start time
+    cannot be read is treated as expired.
+    """
+    hours = config.admin_session_hours
+    session = request.session
+    if hours <= 0 or session is None:
+        return
+    try:
+        started = datetime.strptime(session["created_at"][:19], "%Y-%m-%d %H:%M:%S")
+        age = datetime.now(timezone.utc) - started.replace(tzinfo=timezone.utc)
+        fresh = age <= timedelta(hours=hours)
+    except (KeyError, IndexError, TypeError, ValueError):
+        fresh = False
+    if fresh:
+        return
+    accounts.destroy_session(session["id"])
+    audit("auth.session_expired", actor=user["email"],
+          detail=f"console session older than {hours}h", ip=request.remote_addr)
+    raise Redirect(
+        _sign_in_url(request),
+        flash=f"For security, console sessions end {hours} hours after signing in. "
+              f"Please sign in again.",
+        tone="error",
+    )
+
+
+_FORMULA_START = ("=", "+", "-", "@", "\t", "\r")
+_PLAIN_NUMBER = re.compile(r"-?\d+(\.\d+)?")
+
+
+def csv_safe(value: Any) -> Any:
+    """Defuse spreadsheet formulas in exported text (CSV injection).
+
+    A customer can type `=HYPERLINK(...)` into a name or address field; Excel
+    and Sheets would execute it when an operator opens the export.  Prefixing
+    a quote makes it inert text.  Plain numbers, negative ones included, are
+    left alone so they stay numbers.
+    """
+    if isinstance(value, str) and value.startswith(_FORMULA_START) \
+            and not _PLAIN_NUMBER.fullmatch(value):
+        return "'" + value
+    return value
 
 
 def _actor(request: Request) -> str:
@@ -96,6 +172,10 @@ def dashboard(request: Request) -> Response:
     if not config.email_live:
         alerts.append("Email is in console mode — set SMTP_HOST to deliver mail.")
     alert_html = "".join(f"<li>{E(a)}</li>" for a in alerts)
+    analytics_link = (
+        '<a class="btn btn--quiet btn--small" href="/admin/analytics">Full analytics</a>'
+        if request.user["role"] == "admin" else ""
+    )
 
     content = f"""
 <div class="stat-row">{stat_cards}</div>
@@ -106,7 +186,8 @@ def dashboard(request: Request) -> Response:
 <div class="panel">
   <div class="panel__head">
     <h2>Revenue · last 14 days</h2>
-    <span class="muted">{money(sum(c for _, c in series))} total</span>
+    <span class="cluster"><span class="muted">{money(sum(c for _, c in series))} total</span>
+      {analytics_link}</span>
   </div>
   <div class="panel__body"><div class="sparkline">{bars}</div></div>
 </div>
@@ -188,14 +269,14 @@ def admin_orders_export(request: Request) -> Response:
         "discount_code", "carrier", "tracking",
     ])
     for o in rows:
-        writer.writerow([
+        writer.writerow([csv_safe(cell) for cell in [
             o["number"], o["created_at"], o["status"], o["email"], o["ship_name"],
             o["ship_city"], o["ship_region"], o["ship_postal"], o["item_count"],
             f"{o['subtotal_cents'] / 100:.2f}", f"{o['discount_cents'] / 100:.2f}",
             f"{o['shipping_cents'] / 100:.2f}", f"{o['tax_cents'] / 100:.2f}",
             f"{o['total_cents'] / 100:.2f}", o["discount_code"],
             o["tracking_carrier"], o["tracking_number"],
-        ])
+        ]])
     audit("orders.export", actor=_actor(request), detail=f"{len(rows)} rows")
     return Resp(
         buffer.getvalue(), content_type="text/csv; charset=utf-8",
@@ -851,119 +932,10 @@ def admin_email_flush(request: Request) -> Response:
 
 @router.get("/admin/traffic")
 def admin_traffic(request: Request) -> Response:
-    require_staff(request)
-    days = request.get_int("days", 30) or 30
-    days = days if days in (7, 30, 90) else 30
-    stats = analytics.summary(days)
-    series = analytics.by_day(min(days, 30))
-    peak = max((views for _, views, _ in series), default=0) or 1
-
-    bars = "".join(
-        f'<span style="height:{max(2, round(100 * views / peak))}%" '
-        f'title="{E(day)}: {views} views, {visitors} visitors"></span>'
-        for day, views, visitors in series
-    )
-
-    stat_cards = "".join(
-        f'<div class="stat"><span class="stat__label">{E(label)}</span>'
-        f'<span class="stat__value">{E(value)}</span>'
-        f'<span class="stat__note">{E(note)}</span></div>'
-        for label, value, note in [
-            ("Visits", f"{stats['visits']:,}", f"last {days} days"),
-            ("Visitors", f"{stats['visitors']:,}", "unique, cookieless"),
-            ("Pages / visitor", stats["pages_per_visitor"], "engagement"),
-            ("Conversion", f"{stats['conversion_pct']}%", "visitors who ordered"),
-            ("Revenue", money(stats["revenue_cents"]), f"last {days} days"),
-            ("Revenue / visitor", money(stats["revenue_per_visitor_cents"]),
-             "across all visitors"),
-        ]
-    )
-
-    top = stats["funnel"][0][1] or 1
-    funnel = "".join(
-        f'<div class="funnel__step">'
-        f'<div class="funnel__bar" style="width:{max(2, round(100 * count / top))}%"></div>'
-        f'<span class="funnel__label">{E(label)}</span>'
-        f'<span class="funnel__count">{count:,}'
-        f'<small>{round(100 * count / top)}%</small></span>'
-        f'</div>'
-        for label, count in stats["funnel"]
-    )
-
-    path_rows = [
-        [f'<a href="{E(r["path"])}">{E(r["path"])}</a>',
-         f'<span class="num">{r["views"]:,}</span>',
-         f'<span class="num">{r["visitors"]:,}</span>']
-        for r in analytics.top_paths(12, days)
-    ]
-    referrer_rows = [
-        [E(r["referrer"]), f'<span class="num">{r["views"]:,}</span>',
-         f'<span class="num">{r["visitors"]:,}</span>']
-        for r in analytics.top_referrers(10, days)
-    ]
-    device_rows = [
-        [E(r["device"].title()), f'<span class="num">{r["visitors"]:,}</span>']
-        for r in analytics.devices(days)
-    ]
-
-    ranges = "".join(
-        f'<a class="chip{" is-active" if days == d else ""}" '
-        f'href="/admin/traffic?days={d}">{d} days</a>'
-        for d in (7, 30, 90)
-    )
-
-    content = f"""
-<div class="filter-bar">{ranges}</div>
-<div class="stat-row">{stat_cards}</div>
-
-<div class="panel">
-  <div class="panel__head">
-    <h2>Visits &amp; sales</h2>
-    <span class="muted">The metric named in the brief</span>
-  </div>
-  <div class="panel__body">
-    <div class="sparkline">{bars}</div>
-  </div>
-</div>
-
-<div class="panel">
-  <div class="panel__head"><h2>Funnel</h2>
-    <span class="muted">Distinct visitors reaching each step</span></div>
-  <div class="panel__body"><div class="funnel">{funnel}</div></div>
-</div>
-
-<div class="split">
-  <div class="panel">
-    <div class="panel__head"><h2>Top pages</h2></div>
-    {table(["Path", "Views", "Visitors"], path_rows, empty="No traffic yet.")}
-  </div>
-  <div class="panel">
-    <div class="panel__head"><h2>Referrers</h2></div>
-    {table(["Source", "Views", "Visitors"], referrer_rows,
-           empty="No referrers yet — all traffic is direct.")}
-  </div>
-</div>
-
-<div class="panel">
-  <div class="panel__head"><h2>Devices</h2></div>
-  {table(["Device", "Visitors"], device_rows, empty="No traffic yet.")}
-</div>
-
-<div class="panel">
-  <div class="panel__head"><h2>How this is measured</h2></div>
-  <div class="panel__body prose">
-    <p>First-party and cookieless. A visitor is a hash of IP address and
-       browser against a salt that changes every day and is never written
-       down, so nobody can be followed between days, no raw address is kept,
-       and no third party sees any of it.</p>
-    <p>That is deliberate: it measures what the brief asked for without
-       putting the store under a cookie-consent obligation. Known crawlers are
-       excluded, and rows older than 400 days are deleted automatically.</p>
-  </div>
-</div>
-"""
-    return html_response(admin_layout(request, content, title="Traffic",
-                                      active="/admin/traffic"))
+    """Traffic now lives inside Analytics; keep old bookmarks working."""
+    days = request.get_int("days", 30)
+    preset = {7: "7d", 90: "90d"}.get(days, "30d")
+    return redirect(f"/admin/analytics?range={preset}#traffic", status=301)
 
 
 # ---------------------------------------------------------------- activity

@@ -29,10 +29,17 @@ class Line:
     color: str
     unit_cents: int
     available: int
+    department: str = ""
+    compare_cents: int | None = None
 
     @property
     def total_cents(self) -> int:
         return self.unit_cents * self.quantity
+
+    @property
+    def on_sale(self) -> bool:
+        """Selling below its compare-at price -- the storefront's Sale rule."""
+        return self.compare_cents is not None and self.compare_cents > self.unit_cents
 
     @property
     def variant_label(self) -> str:
@@ -102,10 +109,12 @@ def load(cart_id: str | None) -> Cart:
         "SELECT ci.variant_id, ci.quantity, v.sku, v.size, v.color, "
         "       COALESCE(v.price_cents, p.price_cents) AS unit_cents, "
         "       MAX(v.stock - v.reserved, 0) AS available, "
-        "       p.title, p.slug, p.art_seed "
+        "       p.title, p.slug, p.art_seed, p.compare_cents, "
+        "       COALESCE(c.department, '') AS department "
         "FROM cart_items ci "
         "JOIN variants v ON v.id = ci.variant_id "
         "JOIN products p ON p.id = v.product_id "
+        "LEFT JOIN collections c ON c.id = p.collection_id "
         "WHERE ci.cart_id = ? AND p.status = 'active' "
         "ORDER BY ci.added_at, ci.id",
         (cart_id,),
@@ -115,7 +124,8 @@ def load(cart_id: str | None) -> Cart:
             variant_id=r["variant_id"], quantity=r["quantity"], sku=r["sku"],
             title=r["title"], slug=r["slug"], art_seed=r["art_seed"],
             size=r["size"], color=r["color"], unit_cents=r["unit_cents"],
-            available=r["available"],
+            available=r["available"], department=r["department"],
+            compare_cents=r["compare_cents"],
         )
         for r in rows
     ]

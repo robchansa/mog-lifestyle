@@ -6,6 +6,7 @@ response carries a hardened set of security headers.
 """
 from __future__ import annotations
 
+import hashlib
 import html
 import json
 import mimetypes
@@ -188,6 +189,17 @@ class HttpError(Exception):
         self.headers = headers or {}
 
 
+class Redirect(Exception):
+    """Raised from inside a handler -- typically an access guard -- to answer
+    with a redirect.  It becomes an ordinary response before middleware sees
+    it, so session cookies and the like are still issued on the way out."""
+
+    def __init__(self, location: str, *, flash: str | None = None,
+                 tone: str = "ok", status: int = 303):
+        super().__init__(location)
+        self.response = redirect(location, status=status, flash=flash, tone=tone)
+
+
 # ------------------------------------------------------------------ routing
 
 @dataclass
@@ -262,7 +274,10 @@ class Router:
                 raise HttpError(404, "Not found")
             route, params = found
             req.params = params
-            return route.handler(req, **params)
+            try:
+                return route.handler(req, **params)
+            except Redirect as exc:
+                return exc.response
 
         handler = terminal
         for middleware in reversed(self.middleware):
@@ -298,6 +313,29 @@ def _compile_rule(rule: str) -> tuple[re.Pattern, dict[str, Callable]]:
 # ------------------------------------------------------------ static files
 
 _STATIC_CACHE: dict[str, tuple[bytes, str, str]] = {}
+_ASSET_URLS: dict[str, tuple[int, str]] = {}
+
+
+def static_url(path: str) -> str:
+    """A `/static/...` URL carrying a hash of the file's contents.
+
+    Versioned URLs are cached by browsers for a year, so a deploy that changes
+    a stylesheet must change its URL -- otherwise returning visitors keep the
+    old one.  The hash is recomputed only when the file changes on disk.
+    """
+    target = STATIC_DIR / path[len("/static/"):] if path.startswith("/static/") else None
+    if target is None:
+        return path
+    try:
+        stamp = target.stat().st_mtime_ns
+    except OSError:
+        return path
+    cached = _ASSET_URLS.get(path)
+    if cached is None or cached[0] != stamp:
+        digest = hashlib.sha256(target.read_bytes()).hexdigest()[:12]
+        cached = (stamp, f"{path}?v={digest}")
+        _ASSET_URLS[path] = cached
+    return cached[1]
 
 
 def serve_static(request: Request, filename: str) -> Response:
@@ -327,7 +365,12 @@ def serve_static(request: Request, filename: str) -> Response:
     etag = f'W/"{stamp}"'
     if request.headers.get("If-None-Match") == etag:
         return Response(b"", status=304, headers={"ETag": etag})
-    cache = "public, max-age=31536000, immutable" if config.is_production else "no-cache"
+    if not config.is_production:
+        cache = "no-cache"
+    elif request.query.get("v"):
+        cache = "public, max-age=31536000, immutable"    # the URL changes with the file
+    else:
+        cache = "public, max-age=3600"                   # unversioned: revalidate hourly
     return Response(payload, content_type=ctype,
                     headers={"ETag": etag, "Cache-Control": cache})
 
@@ -359,30 +402,16 @@ def build_handler(router: Router):
         # -- plumbing ---------------------------------------------------
 
         def _handle(self, method: str) -> None:
-            started = time.perf_counter()
             try:
                 request = self._read_request(method)
             except HttpError as exc:
                 self._emit(Response(exc.message, status=exc.status,
                                     content_type="text/plain; charset=utf-8"), "HEAD")
                 return
-
             try:
-                response = router.dispatch(request)
-            except HttpError as exc:
-                response = _error_response(request, exc.status, exc.message)
-                response.headers.update(exc.headers)
+                response = respond(router, request)
             except BrokenPipeError:
                 return
-            except Exception:
-                traceback.print_exc()
-                detail = "" if config.is_production else traceback.format_exc()
-                response = _error_response(request, 500, "Something went wrong.", detail)
-            finally:
-                db.close()
-
-            elapsed = (time.perf_counter() - started) * 1000
-            response.headers.setdefault("X-Response-Time", f"{elapsed:.1f}ms")
             self._emit(response, method)
 
         def _read_request(self, method: str) -> Request:
@@ -409,14 +438,8 @@ def build_handler(router: Router):
             body = b"" if method == "HEAD" else response.body
             try:
                 self.send_response(response.status)
-                self.send_header("Content-Type", response.content_type)
-                self.send_header("Content-Length", str(len(response.body)))
-                for name, value in _security_headers().items():
+                for name, value in header_list(response):
                     self.send_header(name, value)
-                for name, value in response.headers.items():
-                    self.send_header(name, value)
-                for cookie in response.cookies:
-                    self.send_header("Set-Cookie", cookie)
                 self.end_headers()
                 if body:
                     self.wfile.write(body)
@@ -424,6 +447,42 @@ def build_handler(router: Router):
                 pass
 
     return Handler
+
+
+def respond(router: Router, request: Request) -> Response:
+    """Turn one request into a finished response.
+
+    Errors become proper pages, the thread's database connection is released,
+    and timing is recorded.  Shared by the built-in server and the WSGI
+    adapter, so both behave identically.
+    """
+    started = time.perf_counter()
+    try:
+        response = router.dispatch(request)
+    except HttpError as exc:
+        response = _error_response(request, exc.status, exc.message)
+        response.headers.update(exc.headers)
+    except BrokenPipeError:
+        raise
+    except Exception:
+        traceback.print_exc()
+        detail = "" if config.is_production else traceback.format_exc()
+        response = _error_response(request, 500, "Something went wrong.", detail)
+    finally:
+        db.close()
+    elapsed = (time.perf_counter() - started) * 1000
+    response.headers.setdefault("X-Response-Time", f"{elapsed:.1f}ms")
+    return response
+
+
+def header_list(response: Response) -> list[tuple[str, str]]:
+    """Every header to send, security headers included, in sending order."""
+    headers = [("Content-Type", response.content_type),
+               ("Content-Length", str(len(response.body)))]
+    headers += list(_security_headers().items())
+    headers += list(response.headers.items())
+    headers += [("Set-Cookie", cookie) for cookie in response.cookies]
+    return headers
 
 
 def _security_headers() -> dict[str, str]:

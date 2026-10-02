@@ -137,9 +137,9 @@ class Site:
         request.add_header("User-Agent", "mog-audit/1.0")
         try:
             with urllib.request.urlopen(request, timeout=20) as response:
-                result = (response.status, dict(response.headers), response.read())
+                result = (response.status, _headers(response.headers), response.read())
         except urllib.error.HTTPError as exc:
-            result = (exc.code, dict(exc.headers), exc.read())
+            result = (exc.code, _headers(exc.headers), exc.read())
         except Exception as exc:                                   # noqa: BLE001
             result = (0, {"error": str(exc)}, b"")
         self.cache[key] = result
@@ -151,6 +151,35 @@ class Site:
         if body:
             parser.feed(body.decode("utf-8", "replace"))
         return status, headers, parser
+
+
+def _headers(message) -> dict:
+    """Headers as a dict, keeping *every* Set-Cookie (one per line).
+
+    A plain dict() keeps only the last one, which would let a tracking cookie
+    hide behind the session cookie.
+    """
+    headers = dict(message)
+    cookies = message.get_all("Set-Cookie") or []
+    if cookies:
+        headers["Set-Cookie"] = "\n".join(cookies)
+    return headers
+
+
+def _status_without_redirect(url: str) -> tuple[int, str]:
+    """Status and Location of a URL, without following the redirect."""
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *args, **kwargs):
+            return None
+    opener = urllib.request.build_opener(NoRedirect)
+    request = urllib.request.Request(url, headers={"User-Agent": "mog-audit/1.0"})
+    try:
+        with opener.open(request, timeout=20) as response:
+            return response.status, response.headers.get("Location", "")
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.headers.get("Location", "")
+    except Exception:                                              # noqa: BLE001
+        return 0, ""
 
 
 # ------------------------------------------------------------------ colour
@@ -490,13 +519,14 @@ def audit(site: Site) -> dict[str, Result]:
     trackers = ("googletagmanager", "google-analytics", "gtag(", "plausible",
                 "umami", "fathom", "matomo", "posthog")
     installed = [t for t in trackers if t in home_html]
-    code, _, _ = site.fetch("/admin/traffic")
-    first_party = code in (200, 403)        # 403 == exists but staff-only
+    code, location = _status_without_redirect(site.base + "/admin/analytics")
+    # 200/403, or a redirect to sign in: the page exists and is access-controlled.
+    first_party = code in (200, 403) or (code in (302, 303) and "/login" in location)
     if installed:
         r.ok(f"third-party analytics installed: {', '.join(installed)}")
     elif first_party:
-        r.ok("first-party analytics: /admin/traffic reports visits, funnel "
-             "and conversion server-side (no cookie, no third party)")
+        r.ok("first-party analytics: /admin/analytics reports sales, visits, "
+             "funnel and conversion server-side (no cookie, no third party)")
     else:
         r.bad("no analytics installed")
 

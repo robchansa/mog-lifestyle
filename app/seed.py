@@ -12,8 +12,37 @@ nothing here is load-bearing.
 """
 from __future__ import annotations
 
+import os
+
 from . import db
-from .security import audit, hash_password, slugify
+from .config import config
+from .security import audit, hash_password, password_problems, slugify
+
+# Development only.  It is printed in the README, so production refuses it:
+# there the first admin comes from MOG_ADMIN_PASSWORD or `run.py --create-admin`.
+DEV_ADMIN_EMAIL = "info@moglifestyle.fit"
+DEV_ADMIN_PASSWORD = "mog-admin-2026"
+
+
+class SeedError(RuntimeError):
+    """The seed was asked to do something unsafe."""
+
+
+def admin_credentials() -> tuple[str, str]:
+    """The first admin's email and password, or ("", "") to skip creating one."""
+    email = os.environ.get("MOG_ADMIN_EMAIL", "").strip() or DEV_ADMIN_EMAIL
+    password = os.environ.get("MOG_ADMIN_PASSWORD", "")
+    if not config.is_production:
+        return email, password or DEV_ADMIN_PASSWORD
+    if not password:
+        return "", ""
+    if password == DEV_ADMIN_PASSWORD:
+        raise SeedError("MOG_ADMIN_PASSWORD is the public development password. "
+                        "Choose a new one.")
+    problems = password_problems(password)
+    if problems:
+        raise SeedError("MOG_ADMIN_PASSWORD: " + " ".join(problems))
+    return email, password
 
 # slug, title, department, position
 CATEGORIES = [
@@ -280,9 +309,13 @@ DISCOUNTS = [
 ]
 
 
-def run(*, staff_email: str = "info@moglifestyle.fit",
-        staff_password: str = "mog-admin-2026", quiet: bool = False) -> dict:
+def run(*, staff_email: str | None = None, staff_password: str | None = None,
+        quiet: bool = False) -> dict:
     """Populate an empty database.  Idempotent: existing rows are left alone."""
+    if staff_email is None or staff_password is None:
+        env_email, env_password = admin_credentials()
+        staff_email = staff_email if staff_email is not None else env_email
+        staff_password = staff_password if staff_password is not None else env_password
     created = {"categories": 0, "products": 0, "variants": 0,
                "discounts": 0, "staff": 0}
 
@@ -330,7 +363,8 @@ def run(*, staff_email: str = "info@moglifestyle.fit",
                       min_spend_cents=min_spend, max_uses=max_uses)
             created["discounts"] += 1
 
-        if not db.one("SELECT id FROM users WHERE email = ?", (staff_email,)):
+        if staff_email and staff_password and \
+                not db.one("SELECT id FROM users WHERE email = ?", (staff_email,)):
             db.insert(
                 "users", email=staff_email,
                 password_hash=hash_password(staff_password),
@@ -340,6 +374,9 @@ def run(*, staff_email: str = "info@moglifestyle.fit",
 
     if created["products"]:
         audit("seed.run", detail=str(created))
+    if not quiet and not staff_email and config.is_production \
+            and not db.scalar("SELECT 1 FROM users WHERE role = 'admin' LIMIT 1"):
+        print("  no admin account yet: run  python3 run.py --create-admin you@example.com")
     if not quiet:
         print(
             f"  seeded: {created['categories']} categories, "

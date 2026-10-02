@@ -48,17 +48,31 @@ class SuppliedAssetTests(unittest.TestCase):
         self.assertAlmostEqual(image.width / image.height, 1087 / 304, places=1)
 
     def test_product_photography_is_four_by_five(self):
-        from pngkit import decode
-        import subprocess
+        from pngkit import jpeg_size
         for name in ("mog-tee-front.jpg", "lifestyle-tee-back.jpg"):
-            out = subprocess.run(
-                ["sips", "-g", "pixelWidth", "-g", "pixelHeight", str(IMG / name)],
-                capture_output=True, text=True,
-            ).stdout
-            width = int(out.split("pixelWidth:")[1].split()[0])
-            height = int(out.split("pixelHeight:")[1].split()[0])
+            width, height = jpeg_size((IMG / name).read_bytes())
             with self.subTest(name=name):
                 self.assertAlmostEqual(width / height, 0.8, places=2)
+
+    def test_jpeg_size_matches_the_system_reader(self):
+        """Cross-check the pure-Python reader where macOS's `sips` exists."""
+        import shutil
+        import subprocess
+        from pngkit import jpeg_size
+        if not shutil.which("sips"):
+            self.skipTest("sips is macOS-only")
+        for path in sorted(IMG.glob("*.jpg")):
+            out = subprocess.run(["sips", "-g", "pixelWidth", "-g", "pixelHeight",
+                                  str(path)], capture_output=True, text=True).stdout
+            expected = (int(out.split("pixelWidth:")[1].split()[0]),
+                        int(out.split("pixelHeight:")[1].split()[0]))
+            with self.subTest(name=path.name):
+                self.assertEqual(jpeg_size(path.read_bytes()), expected)
+
+    def test_jpeg_size_rejects_other_files(self):
+        from pngkit import jpeg_size
+        with self.assertRaises(ValueError):
+            jpeg_size(b"\x89PNG\r\n")
 
 
 class PngKitTests(unittest.TestCase):

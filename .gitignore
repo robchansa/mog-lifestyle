@@ -1,0 +1,19 @@
+# Runtime data: the database and the development secret key never belong in
+# git.  Production keeps its own outside the code folder (docs/NAMECHEAP.md).
+data/
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+.secret_key
+
+# Private settings files
+.env
+*.env
+
+# Build output (python3 tools/package.py)
+dist/
+
+# Python and OS clutter
+__pycache__/
+*.py[cod]
+.DS_Store

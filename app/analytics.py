@@ -8,18 +8,20 @@ store out of consent-banner territory.
 A visitor is identified by `sha256(daily_salt + ip + user_agent)`.  The salt is
 random per process-day and never written down, so the hash cannot be reversed,
 cannot be joined to anything else, and stops being meaningful at midnight.
+
+Each view is written twice: the raw row in `page_views` (for top pages) and a
+running per-visitor-day summary in `visits` (for everything else).  Reporting
+lives in `reports`.
 """
 from __future__ import annotations
 
 import hashlib
-import os
 import re
 import secrets
-import sqlite3
 from datetime import date
-from typing import Any
 
 from . import db
+from .config import config
 
 BOT_PATTERN = re.compile(
     r"bot|crawl|spider|slurp|bingpreview|facebookexternalhit|headless|"
@@ -36,9 +38,14 @@ _salt = ""
 
 
 def _daily_salt() -> str:
-    """A fresh random salt each day, held only in memory."""
+    """A fresh random salt each day, held only in memory.
+
+    "Day" is the store's day (`MOG_TIMEZONE`), so a visitor counted once in a
+    daily report is counted once -- not split across a UTC midnight that falls
+    in the middle of the store's evening.
+    """
     global _salt_day, _salt
-    today = date.today()
+    today = config.local_now().date()
     if _salt_day != today or not _salt:
         _salt_day, _salt = today, secrets.token_hex(16)
     return _salt
@@ -77,106 +84,50 @@ def should_record(path: str, user_agent: str) -> bool:
     return not BOT_PATTERN.search(user_agent or "")
 
 
-def record(path: str, *, ip: str, user_agent: str, referrer: str = "") -> None:
-    """Log one page view.  Never raises -- analytics must not break a page."""
+def record(path: str, *, ip: str, user_agent: str, referrer: str = "",
+           host: str = "") -> None:
+    """Log one page view.  Never raises -- analytics must not break a page.
+
+    `host` is the site's own Host header: a referrer on the same host is just
+    someone clicking around the store, not a traffic source, so it is dropped.
+    """
     if not should_record(path, user_agent):
         return
-    host = ""
+    source = ""
     if referrer:
         import urllib.parse
-        parsed = urllib.parse.urlsplit(referrer)
-        host = parsed.netloc[:120]
+        source = urllib.parse.urlsplit(referrer).netloc.lower()[:120]
+        if host and source == host.strip().lower():
+            source = ""
+    kind = classify(path)
     try:
+        visitor = visitor_hash(ip, user_agent)
+        device = device_class(user_agent)
         with db.tx():
-            db.insert(
-                "page_views", path=path[:200], kind=classify(path),
-                visitor=visitor_hash(ip, user_agent), referrer=host,
-                device=device_class(user_agent),
+            db.insert("page_views", path=path[:200], kind=kind, visitor=visitor,
+                      referrer=source, device=device)
+            db.execute(
+                "INSERT INTO visits (visitor, views, device, referrer, entry_path, "
+                "  saw_product, saw_cart, saw_checkout) "
+                "VALUES (?, 1, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(visitor) DO UPDATE SET views = visits.views + 1, "
+                "  referrer = CASE WHEN visits.referrer = '' THEN excluded.referrer "
+                "                  ELSE visits.referrer END, "
+                "  saw_product = MAX(visits.saw_product, excluded.saw_product), "
+                "  saw_cart = MAX(visits.saw_cart, excluded.saw_cart), "
+                "  saw_checkout = MAX(visits.saw_checkout, excluded.saw_checkout)",
+                (visitor, device, source, path[:200], int(kind == "product"),
+                 int(kind == "cart"), int(kind == "checkout")),
             )
     except Exception:                                          # noqa: BLE001
         pass
 
 
-# ------------------------------------------------------------------ reports
-
-def summary(days: int = 30) -> dict[str, Any]:
-    window = f"-{int(days)} days"
-    visits = int(db.scalar(
-        "SELECT count(*) FROM page_views WHERE created_at >= datetime('now', ?)",
-        (window,), 0))
-    visitors = int(db.scalar(
-        "SELECT count(DISTINCT visitor) FROM page_views "
-        "WHERE created_at >= datetime('now', ?)", (window,), 0))
-
-    # The funnel the brief asks about, by distinct visitor at each step.
-    def reach(kind: str) -> int:
-        return int(db.scalar(
-            "SELECT count(DISTINCT visitor) FROM page_views "
-            "WHERE kind = ? AND created_at >= datetime('now', ?)",
-            (kind, window), 0))
-
-    orders = int(db.scalar(
-        "SELECT count(*) FROM orders WHERE status IN ('paid','fulfilled') "
-        "AND created_at >= datetime('now', ?)", (window,), 0))
-    revenue = int(db.scalar(
-        "SELECT COALESCE(SUM(total_cents), 0) FROM orders "
-        "WHERE status IN ('paid','fulfilled') AND created_at >= datetime('now', ?)",
-        (window,), 0))
-
-    return {
-        "visits": visits,
-        "visitors": visitors,
-        "pages_per_visitor": round(visits / visitors, 1) if visitors else 0.0,
-        "funnel": [
-            ("Visited", visitors),
-            ("Viewed a product", reach("product")),
-            ("Opened the bag", reach("cart")),
-            ("Started checkout", reach("checkout")),
-            ("Ordered", orders),
-        ],
-        "conversion_pct": round(orders * 100 / visitors, 2) if visitors else 0.0,
-        "revenue_cents": revenue,
-        "revenue_per_visitor_cents": revenue // visitors if visitors else 0,
-    }
-
-
-def by_day(days: int = 14) -> list[tuple[str, int, int]]:
-    rows = db.query(
-        "SELECT date(created_at) AS day, count(*) AS views, "
-        "       count(DISTINCT visitor) AS visitors "
-        "FROM page_views WHERE created_at >= datetime('now', ?) "
-        "GROUP BY day ORDER BY day", (f"-{int(days)} days",))
-    return [(r["day"], r["views"], r["visitors"]) for r in rows]
-
-
-def top_paths(limit: int = 10, days: int = 30) -> list[sqlite3.Row]:
-    return db.query(
-        "SELECT path, count(*) AS views, count(DISTINCT visitor) AS visitors "
-        "FROM page_views WHERE created_at >= datetime('now', ?) "
-        "GROUP BY path ORDER BY views DESC LIMIT ?",
-        (f"-{int(days)} days", limit))
-
-
-def top_referrers(limit: int = 10, days: int = 30) -> list[sqlite3.Row]:
-    return db.query(
-        "SELECT referrer, count(*) AS views, count(DISTINCT visitor) AS visitors "
-        "FROM page_views WHERE referrer <> '' "
-        "AND created_at >= datetime('now', ?) "
-        "GROUP BY referrer ORDER BY views DESC LIMIT ?",
-        (f"-{int(days)} days", limit))
-
-
-def devices(days: int = 30) -> list[sqlite3.Row]:
-    return db.query(
-        "SELECT device, count(DISTINCT visitor) AS visitors FROM page_views "
-        "WHERE created_at >= datetime('now', ?) GROUP BY device "
-        "ORDER BY visitors DESC", (f"-{int(days)} days",))
-
-
 def prune(keep_days: int = 400) -> int:
-    """Traffic data is not kept forever."""
+    """Traffic data is not kept forever.  Returns page views deleted."""
+    window = f"-{int(keep_days)} days"
     with db.tx():
         cur = db.execute(
-            "DELETE FROM page_views WHERE created_at < datetime('now', ?)",
-            (f"-{int(keep_days)} days",))
+            "DELETE FROM page_views WHERE created_at < datetime('now', ?)", (window,))
+        db.execute("DELETE FROM visits WHERE started_at < datetime('now', ?)", (window,))
     return cur.rowcount

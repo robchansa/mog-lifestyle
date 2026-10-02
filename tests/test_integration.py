@@ -503,7 +503,9 @@ class AdminAccessTests(LiveServerTestCase):
     def test_admin_is_refused_to_anonymous_and_customers(self):
         client = self.client()
         client.get("/admin", follow=False)
-        self.assertEqual(client.last_status, 403)
+        # Anonymous visitors are sent to sign in, and brought back afterwards.
+        self.assertEqual(client.last_status, 303)
+        self.assertEqual(client.last_headers["Location"], "/login?next=%2Fadmin")
 
         client.post("/register", {
             **client.form_fields("/register"), "email": "nosy@example.com",

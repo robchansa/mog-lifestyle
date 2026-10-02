@@ -14,6 +14,11 @@ from .web import (
 
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 CSRF_EXEMPT = frozenset({"/webhooks/stripe"})
+# Pages that carry revenue, orders or personal details.  Nothing under these
+# may be kept by a browser or proxy cache -- after signing out on a shared
+# machine, Back must not redraw the analytics -- or indexed by a crawler that
+# somehow reached one.
+PRIVATE_PREFIXES = ("/admin", "/account")
 
 
 def create_app() -> Router:
@@ -73,6 +78,15 @@ def create_app() -> Router:
         return response
 
     @router.use
+    def private_pages(request: Request, nxt):
+        response = nxt(request)
+        if request.path.startswith(PRIVATE_PREFIXES):
+            response.headers["Cache-Control"] = "no-store, max-age=0"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["X-Robots-Tag"] = "noindex, nofollow"
+        return response
+
+    @router.use
     def analytics_layer(request: Request, nxt):
         response = nxt(request)
         if (request.method == "GET"
@@ -83,6 +97,7 @@ def create_app() -> Router:
                 ip=request.remote_addr,
                 user_agent=request.headers.get("User-Agent", ""),
                 referrer=request.headers.get("Referer", ""),
+                host=request.headers.get("Host", ""),
             )
         return response
 
@@ -111,22 +126,31 @@ def create_app() -> Router:
         return nxt(request)
 
     # -------------------------------------------------------------- routes
-    from . import views_account, views_admin, views_checkout, views_shop
+    from . import (
+        views_account, views_admin, views_analytics, views_checkout, views_shop,
+    )
 
     router.include(views_shop.router)
     router.include(views_account.router)
     router.include(views_checkout.router)
     router.include(views_admin.router)
+    router.include(views_analytics.router)
 
     @router.get("/static/<path:filename>")
     def static_files(request: Request, filename: str) -> Response:
         return serve_static(request, filename)
+
+    @router.get("/favicon.ico")
+    def favicon(request: Request) -> Response:
+        # Browsers ask for this whatever the page declares; answer, don't 404.
+        return serve_static(request, "brand/favicon.png")
 
     @router.get("/healthz")
     def healthz(request: Request) -> Response:
         return json_response({
             "status": "ok",
             "version": __import__("app").__version__,
+            "build": _short_build(build_info().get("commit", "")),
             "payments": "live" if config.payments_live else "demo",
             "email": "smtp" if config.email_live else "console",
             "products": db.scalar("SELECT count(*) FROM products", (), 0),
@@ -161,6 +185,32 @@ def create_app() -> Router:
         )
 
     return router
+
+
+# ------------------------------------------------------------------ build
+
+_BUILD: dict | None = None
+
+
+def build_info() -> dict:
+    """What `tools/package.py` stamped into BUILD.json: commit and build time.
+
+    /healthz reports the commit, so after a push you can see the deploy landed.
+    """
+    global _BUILD
+    if _BUILD is None:
+        import json
+        from .config import BASE_DIR
+        try:
+            _BUILD = json.loads((BASE_DIR / "BUILD.json").read_text())
+        except (OSError, ValueError):
+            _BUILD = {}
+    return _BUILD
+
+
+def _short_build(commit: str) -> str:
+    """12 characters of the commit, keeping the marker for uncommitted builds."""
+    return commit[:12] + ("-dirty" if commit.endswith("-dirty") else "")
 
 
 # ------------------------------------------------------------ maintenance

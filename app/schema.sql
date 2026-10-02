@@ -176,11 +176,14 @@ CREATE TABLE IF NOT EXISTS orders (
     created_at          TEXT NOT NULL DEFAULT (datetime('now')),
     paid_at             TEXT,
     fulfilled_at        TEXT,
-    cancelled_at        TEXT
+    cancelled_at        TEXT,
+    refunded_at         TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at);
+CREATE INDEX IF NOT EXISTS idx_orders_paid ON orders(paid_at);
+CREATE INDEX IF NOT EXISTS idx_orders_email ON orders(email COLLATE NOCASE);
 
 CREATE TABLE IF NOT EXISTS order_items (
     id            INTEGER PRIMARY KEY,
@@ -192,9 +195,15 @@ CREATE TABLE IF NOT EXISTS order_items (
     slug          TEXT NOT NULL DEFAULT '',
     art_seed      TEXT NOT NULL DEFAULT '',
     unit_cents    INTEGER NOT NULL,
-    quantity      INTEGER NOT NULL CHECK (quantity > 0)
+    quantity      INTEGER NOT NULL CHECK (quantity > 0),
+    -- Snapshotted at checkout so reports describe the sale as it happened:
+    -- moving a product to another department, or ending its markdown, must
+    -- not rewrite last month's numbers.
+    department    TEXT NOT NULL DEFAULT '',        -- men | women | general
+    on_sale       INTEGER NOT NULL DEFAULT 0       -- sold below compare-at price
 );
 CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
+CREATE INDEX IF NOT EXISTS idx_users_created ON users(created_at);
 
 -- ---------------------------------------------------- operational tables
 CREATE TABLE IF NOT EXISTS email_outbox (
@@ -263,6 +272,25 @@ CREATE TABLE IF NOT EXISTS page_views (
 CREATE INDEX IF NOT EXISTS idx_views_created ON page_views(created_at);
 CREATE INDEX IF NOT EXISTS idx_views_kind ON page_views(kind);
 CREATE INDEX IF NOT EXISTS idx_views_visitor ON page_views(visitor);
+-- Top pages reads only these columns, so the index alone answers it.
+CREATE INDEX IF NOT EXISTS idx_views_paths ON page_views(created_at, path, visitor);
+
+-- One row per visitor per day, kept current as each page view is recorded.
+-- The daily salt means a visitor hash never spans two days, so visitors over
+-- any range is simply a count of rows here -- no DISTINCT over raw page views,
+-- which keeps a year of traffic reportable in milliseconds.
+CREATE TABLE IF NOT EXISTS visits (
+    visitor      TEXT PRIMARY KEY,
+    started_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    views        INTEGER NOT NULL DEFAULT 0,
+    device       TEXT NOT NULL DEFAULT 'desktop',
+    referrer     TEXT NOT NULL DEFAULT '',     -- first external host, if any
+    entry_path   TEXT NOT NULL DEFAULT '',
+    saw_product  INTEGER NOT NULL DEFAULT 0,
+    saw_cart     INTEGER NOT NULL DEFAULT 0,
+    saw_checkout INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_visits_started ON visits(started_at);
 
 CREATE TABLE IF NOT EXISTS rate_limits (
     bucket     TEXT PRIMARY KEY,

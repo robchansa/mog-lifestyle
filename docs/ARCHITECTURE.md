@@ -178,6 +178,43 @@ filters, sorting and the newsletter all work without it.
 
 ---
 
+## Reporting
+
+`/admin/analytics` reads everything from `app/reports.py`; the view module only
+lays numbers out.
+
+- **Store-local calendar.** Timestamps are UTC. A report's range is converted to
+  UTC at the store's local midnights, and the range is split into spans of
+  constant UTC offset (`offset_spans`, exact to the second at each
+  daylight-saving change). SQL shifts each row by its span's offset and buckets
+  it by day, Monday-start week, month or year, so all aggregation — distinct
+  counts included — stays in SQLite. A test proves the SQL and Python calendars
+  agree for every grain.
+- **Sales as they happened.** `order_items.department` and `on_sale` are written
+  at checkout. Men, Women and Everyone partition product sales; Sale overlaps
+  them. Lines from before the columns existed were backfilled once from the
+  catalogue.
+- **Traffic rollup.** Each page view also upserts a `visits` row — one per
+  visitor per day, since the visitor hash's salt rotates at the store's
+  midnight — so visitors, the funnel, sources and devices are row counts over a
+  small table instead of `DISTINCT` over raw views.
+- **Charts** (`app/charts.py`) are SVG marks with HTML text, which keeps labels
+  legible at any width and needs no script; hover detail is CSS, and every chart
+  carries its data as a table for assistive technology.
+
+## Hosting adapters
+
+The same router runs under the built-in threaded server (`run.py`) or any WSGI
+host (`app/wsgi.py`, used by `passenger_wsgi.py` on Namecheap). Both go through
+`web.respond` and `web.header_list`, so error pages, timing and security headers
+are identical. Under WSGI the scheme and client address come from the web
+server, never from client-supplied forwarding headers.
+
+Stylesheets, scripts and the favicon are linked as `/static/…?v=<content hash>`
+(`web.static_url`). Versioned URLs are cached for a year; unversioned static
+files for an hour. Since every push deploys, a changed stylesheet reaches
+returning visitors on their next page view instead of a year later.
+
 ## Security posture
 
 | Concern | Measure |
@@ -192,7 +229,11 @@ filters, sorting and the newsletter all work without it.
 | XSS | `E()` escapes at every interpolation; CSP forbids inline and third-party script |
 | Clickjacking | `X-Frame-Options: DENY` and `frame-ancestors 'none'` |
 | Path traversal | Static paths are resolved and confirmed to sit under the static root |
-| Privilege escalation | `require_staff` on every admin route, checked against the DB role |
+| Privilege escalation | `require_staff` on every admin route and `require_admin` on Analytics, checked against the DB role on every request |
+| Stale privileged sessions | Console sessions end 12 hours after sign-in (`MOG_ADMIN_SESSION_HOURS`), failing closed; customer sessions are unaffected |
+| Sensitive pages cached | `/admin` and `/account` responses are `no-store` and `noindex`, so Back after signing out shows nothing |
+| Spreadsheet injection | Exported text starting with `= + - @` is neutralised; numbers stay numbers |
+| Secrets in code | None: production reads a private env file outside the code folder; the deploy zip excludes data and keys |
 | Payment data | Never touches this server — Stripe Checkout holds it |
 | Forged webhooks | HMAC signature, timestamp tolerance, replay table |
 | Transport | HSTS and an HTTPS redirect when `MOG_FORCE_HTTPS` is on |

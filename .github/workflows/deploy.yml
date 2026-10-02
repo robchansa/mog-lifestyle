@@ -1,0 +1,152 @@
+# Test every push; deploy `main` to Namecheap when the tests pass.
+#
+# One-time setup (repository Settings -> Secrets and variables -> Actions):
+#   NAMECHEAP_SSH_HOST   server hostname from cPanel, e.g. server123.web-hosting.com
+#   NAMECHEAP_SSH_PORT   21098 on Namecheap shared hosting (default if unset)
+#   NAMECHEAP_SSH_USER   your cPanel username
+#   NAMECHEAP_SSH_KEY    private half of a deploy key authorised in cPanel
+#   NAMECHEAP_APP_PATH   the Python app folder, e.g. /home/USER/moglifestyle
+#   NAMECHEAP_PYTHON     the app's virtualenv python, e.g.
+#                        /home/USER/virtualenv/moglifestyle/3.11/bin/python
+#   SITE_URL             optional, e.g. https://moglifestyle.fit -- enables
+#                        the post-deploy health check
+# Full walkthrough: docs/NAMECHEAP.md.  Until the secrets exist, pushes still
+# run the tests and the deploy job is skipped with a notice.
+
+name: Test and deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never run two deploys at once; let an in-flight one finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run the test suite
+        run: python tests/run_tests.py
+      - name: Build the upload zip
+        run: python tools/package.py
+      - name: Keep the zip as a download
+        uses: actions/upload-artifact@v4
+        with:
+          name: mog-lifestyle-upload-zip
+          path: dist/*.zip
+          retention-days: 30
+
+  settings:
+    name: Deploy settings
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      ready: ${{ steps.check.outputs.ready }}
+    steps:
+      - id: check
+        env:
+          SSH_HOST: ${{ secrets.NAMECHEAP_SSH_HOST }}
+          SSH_USER: ${{ secrets.NAMECHEAP_SSH_USER }}
+          SSH_KEY: ${{ secrets.NAMECHEAP_SSH_KEY }}
+          APP_PATH: ${{ secrets.NAMECHEAP_APP_PATH }}
+          APP_PYTHON: ${{ secrets.NAMECHEAP_PYTHON }}
+        run: |
+          missing=""
+          for name in SSH_HOST SSH_USER SSH_KEY APP_PATH APP_PYTHON; do
+            [ -n "${!name}" ] || missing="$missing NAMECHEAP_${name/APP_PYTHON/PYTHON}"
+          done
+          if [ -n "$missing" ]; then
+            echo "::notice title=Deploy skipped::Add these repository secrets to deploy automatically:$missing (see docs/NAMECHEAP.md)"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  deploy:
+    name: Deploy to Namecheap
+    needs: [test, settings]
+    if: needs.settings.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      SSH_HOST: ${{ secrets.NAMECHEAP_SSH_HOST }}
+      SSH_PORT: ${{ secrets.NAMECHEAP_SSH_PORT }}
+      SSH_USER: ${{ secrets.NAMECHEAP_SSH_USER }}
+      APP_PATH: ${{ secrets.NAMECHEAP_APP_PATH }}
+      APP_PYTHON: ${{ secrets.NAMECHEAP_PYTHON }}
+      SITE_URL: ${{ secrets.SITE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Stage the release
+        run: python tools/package.py --stage dist/site
+
+      - name: Connect to the server
+        env:
+          SSH_KEY: ${{ secrets.NAMECHEAP_SSH_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "${SSH_PORT:-21098}" -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          echo "REMOTE=$SSH_USER@$SSH_HOST" >> "$GITHUB_ENV"
+          echo "SSH_CMD=ssh -p ${SSH_PORT:-21098} -i $HOME/.ssh/deploy_key -o BatchMode=yes -o ConnectTimeout=20" >> "$GITHUB_ENV"
+
+      - name: Check the target folder
+        run: |
+          # Only ever deploy into a cPanel Python app folder.  A mistyped path
+          # (your home folder, say) fails here instead of being overwritten.
+          if ! $SSH_CMD "$REMOTE" "test -f '$APP_PATH/passenger_wsgi.py'"; then
+            echo "::error::$APP_PATH has no passenger_wsgi.py. Create the Python app in cPanel first and check NAMECHEAP_APP_PATH."
+            exit 1
+          fi
+
+      - name: Upload
+        run: |
+          # Code folders are mirrored exactly, so deleted files disappear.
+          # Nothing else in the app folder -- tmp/, logs, cPanel's files -- is
+          # touched, and the database lives outside it entirely.
+          rsync -rlpcz --delete -e "$SSH_CMD" \
+            dist/site/app dist/site/tools dist/site/docs "$REMOTE:$APP_PATH/"
+          rsync -rlpcz -e "$SSH_CMD" \
+            dist/site/passenger_wsgi.py dist/site/run.py dist/site/requirements.txt \
+            dist/site/README.md dist/site/BUILD.json "$REMOTE:$APP_PATH/"
+
+      - name: Migrate the database and restart
+        run: |
+          $SSH_CMD "$REMOTE" "cd '$APP_PATH' && '$APP_PYTHON' run.py --migrate && mkdir -p tmp && touch tmp/restart.txt"
+
+      - name: Health check
+        if: env.SITE_URL != ''
+        run: |
+          want="${GITHUB_SHA::12}"
+          for attempt in 1 2 3 4 5 6 7 8; do
+            body="$(curl -fsS --max-time 20 "${SITE_URL%/}/healthz" || true)"
+            if printf '%s' "$body" | grep -q "\"build\": \"$want\""; then
+              echo "Live: $SITE_URL is running $want"
+              exit 0
+            fi
+            sleep 8
+          done
+          echo "::error::$SITE_URL/healthz did not report build $want. Last response: $body"
+          exit 1
+
+      - name: Clean up
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
