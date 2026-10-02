@@ -117,7 +117,9 @@ def main(argv: list[str] | None = None) -> int:
         host = required("NAMECHEAP_FTP_HOST")
         user = required("NAMECHEAP_FTP_USER")
         password = required("NAMECHEAP_FTP_PASSWORD")
-        port = int(os.environ.get("NAMECHEAP_FTP_PORT", "21"))
+        # GitHub exposes an unset optional secret as an empty string, so the
+        # fallback must handle both a missing variable and an empty one.
+        port = int(os.environ.get("NAMECHEAP_FTP_PORT", "").strip() or "21")
         remote_path = os.environ.get("NAMECHEAP_FTP_PATH", "/") or "/"
 
         context = ssl.create_default_context()

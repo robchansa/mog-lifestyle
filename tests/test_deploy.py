@@ -461,6 +461,7 @@ class WorkflowTests(StoreTestCase):
     def test_it_restarts_and_then_checks_health(self):
         deployer = (ROOT / "tools" / "deploy_ftps.py").read_text()
         self.assertIn('ftp.prot_p()', deployer)
+        self.assertIn('.strip() or "21"', deployer)
         self.assertIn('STOR tmp/restart.txt', deployer)
         self.assertIn('"passenger_wsgi.py", "BUILD.json"', deployer)
         self.assertIn('\\"build\\": \\"$want\\"', self.text)
