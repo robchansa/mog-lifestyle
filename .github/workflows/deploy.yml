@@ -5,6 +5,8 @@
 #   NAMECHEAP_FTP_USER       folder-limited FTP account created in cPanel
 #   NAMECHEAP_FTP_PASSWORD   password for that account
 #   NAMECHEAP_FTP_PORT       optional; explicit FTPS defaults to port 21
+#   NAMECHEAP_FTP_TLS_HOST   optional certificate hostname for a shared cPanel
+#                            FTP alias
 #   NAMECHEAP_FTP_PATH       optional; defaults to / because the account is
 #                            rooted at the Python app folder
 #   SITE_URL             optional, e.g. https://moglifestyle.fit -- enables
@@ -84,6 +86,7 @@ jobs:
       NAMECHEAP_FTP_USER: ${{ secrets.NAMECHEAP_FTP_USER }}
       NAMECHEAP_FTP_PASSWORD: ${{ secrets.NAMECHEAP_FTP_PASSWORD }}
       NAMECHEAP_FTP_PATH: ${{ secrets.NAMECHEAP_FTP_PATH }}
+      NAMECHEAP_FTP_TLS_HOST: ${{ secrets.NAMECHEAP_FTP_TLS_HOST }}
       SITE_URL: ${{ secrets.SITE_URL }}
     steps:
       - uses: actions/checkout@v4

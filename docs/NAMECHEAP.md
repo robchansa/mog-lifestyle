@@ -131,11 +131,13 @@ variables** → **Actions** → **New repository secret**, once for each:
 | `NAMECHEAP_FTP_HOST` | the server hostname from cPanel, e.g. `server123.web-hosting.com` |
 | `NAMECHEAP_FTP_USER` | the complete login shown beside the new FTP account |
 | `NAMECHEAP_FTP_PASSWORD` | the generated deployment-account password |
+| `NAMECHEAP_FTP_TLS_HOST` | optional certificate hostname shown by the shared cPanel server |
 | `SITE_URL` | `https://moglifestyle.fit` |
 
 Port 21 and remote path `/` are the defaults. Only add
 `NAMECHEAP_FTP_PORT` or `NAMECHEAP_FTP_PATH` if the hosting account uses
-different values.
+different values. If cPanel's FTP hostname is an alias whose TLS certificate
+uses the shared server name, add that server name as `NAMECHEAP_FTP_TLS_HOST`.
 
 ### 3. Push
 
