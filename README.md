@@ -249,13 +249,14 @@ a fixed four-column grid, because the auto-filled grid resolved to three columns
 at common desktop widths and left a dangling card beside two empty cells in
 every band.
 
-**Analytics is first-party and cookieless.** A visitor is
+**Store reporting is first-party and cookieless.** A visitor is
 `sha256(daily_salt + ip + user_agent)`, truncated — the salt is random per
 process-day and never written down, so a visitor cannot be followed between
 days, no raw address is stored, and no third party is involved. That is what
-keeps the store out of consent-banner territory while still reporting the
-metric the brief named: visits, and the sales they generate. See
-**Admin → Traffic**.
+provides the store's own visit and sales reporting. Separately, visitors who
+choose "Allow analytics" load the shared Google Analytics tag. Visitors who
+decline are not sent to Google Analytics. The choice is available again through
+"Analytics settings" in the footer. See **Admin → Traffic** for store reporting.
 
 **Spam protection without a captcha.** Two signals, both invisible: a field no
 human can see (hidden from view, from the tab order and from the accessibility

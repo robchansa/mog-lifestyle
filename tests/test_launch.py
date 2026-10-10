@@ -307,7 +307,7 @@ class CookiePolicyTests(StoreTestCase):
         }
         self.assertNotIn("set_cookie", calls)
         self.assertNotIn("delete_cookie", calls)
-        # And nothing client-side either.
+        # First-party storefront analytics still does not set cookies.
         js = (Path(__file__).resolve().parent.parent
               / "app" / "static" / "js" / "site.js").read_text()
         tracker_cookies = [line for line in js.splitlines()
@@ -315,18 +315,21 @@ class CookiePolicyTests(StoreTestCase):
         self.assertEqual(tracker_cookies, [],
                          "the only cookie JavaScript touches is the flash message")
 
-    def test_no_third_party_script_or_pixel(self):
+    def test_google_tag_is_shared_and_requires_consent(self):
         from pathlib import Path
         root = Path(__file__).resolve().parent.parent / "app"
-        offenders = []
-        for source in list(root.rglob("*.py")) + list(root.rglob("*.js")):
-            text = source.read_text()
-            for tracker in ("googletagmanager", "google-analytics", "gtag(",
-                            "connect.facebook", "hotjar", "segment.com"):
-                if tracker in text:
-                    offenders.append(f"{source.name}: {tracker}")
-        self.assertEqual(offenders, [],
-                         "a third-party tracker would require a consent banner")
+        layout = (root / "ui.py").read_text()
+        script = (root / "static/js/analytics.js").read_text()
+        self.assertIn('/static/js/analytics.js', layout)
+        self.assertIn('data-analytics-consent', layout)
+        self.assertIn('data-analytics-accept', layout)
+        self.assertIn('data-analytics-reject', layout)
+        self.assertEqual(script.count('G-HVPD9NR41B'), 1)
+        self.assertIn('if (choice === "yes") start()', script)
+        self.assertIn('page_location: window.location.origin + window.location.pathname', script)
+        self.assertEqual(sum('googletagmanager.com/gtag/js' in source.read_text()
+                             for source in root.rglob('*') if source.is_file()
+                             and source.suffix in ('.py', '.js')), 1)
 
     def test_the_privacy_page_describes_the_cookies_in_use(self):
         from app.views_shop import _POLICY_PAGES

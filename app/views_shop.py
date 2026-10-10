@@ -586,8 +586,16 @@ _POLICY_PAGES = {
                      "never touch our servers. We store only a payment reference."),
         ("Email", "Transactional email is always sent. Marketing email is sent "
                   "only if you opted in, and every message can unsubscribe you."),
-        ("Cookies", "Two: one signed session cookie and one signed cart cookie. "
-                    "No third-party tracking, no advertising pixels."),
+        ("Cookies and analytics", "We use a signed session cookie and a signed cart "
+         "cookie to run the shop. If you choose Allow analytics, Google Analytics "
+         "may set additional cookies and receive page views and device information "
+         "to help us understand site traffic. The stream can also measure searches, "
+         "scrolls, outbound clicks, form interactions, videos and downloads. "
+         "Our page-view tag removes URL query parameters and referrer queries, "
+         "and we do not intentionally send names, email addresses or checkout "
+         "details to Google Analytics. "
+         "Choose Decline to keep Google Analytics off. You can change your "
+         "choice with Analytics settings in the footer."),
         ("Your rights", f"Email {config.store_email} to see, correct or delete "
                         f"the data we hold about you. We respond within thirty days."),
     ]),

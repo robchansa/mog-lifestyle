@@ -280,6 +280,7 @@ def site_footer(request: Request) -> str:
         <a href="/about">About</a>
         <a href="/privacy">Privacy</a>
         <a href="/terms">Terms</a>
+        <button type="button" class="privacy-settings" data-analytics-settings>Analytics settings</button>
       </div>
     </nav>
   </div>
@@ -341,12 +342,20 @@ def layout(request: Request, content: str, *, title: str = "",
 <link rel="apple-touch-icon" href="{E(static_url("/static/brand/favicon.png"))}">
 <link rel="stylesheet" href="{E(static_url("/static/css/site.css"))}">
 {structured}
+<script src="{E(static_url("/static/js/analytics.js"))}" defer></script>
 </head>
 <body class="{E(body_class)}">
 {site_header(request, active) if chrome else ""}
 {flash_markup}
 <main id="main" tabindex="-1">{content}</main>
 {site_footer(request) if chrome else ""}
+<aside class="analytics-consent" data-analytics-consent hidden aria-label="Analytics choice">
+  <p>May we use Google Analytics to understand visits and improve MOG? Google may set analytics cookies. Your choice does not affect shopping. <a href="/privacy">Privacy details</a>.</p>
+  <div class="analytics-consent__actions">
+    <button class="btn btn--solid" type="button" data-analytics-accept>Allow analytics</button>
+    <button class="btn btn--ghost" type="button" data-analytics-reject>Decline</button>
+  </div>
+</aside>
 <script src="{E(static_url("/static/js/site.js"))}" defer></script>
 {extra_scripts}
 </body>
@@ -589,7 +598,9 @@ def admin_layout(request: Request, content: str, *, title: str,
 <div class="admin">
   <aside class="admin__side">
     <a class="admin__brand" href="/">{wordmark(tagline=False)}<span class="admin__brand-tag">Admin</span></a>
-    <nav class="admin-nav" aria-label="Admin">{links}</nav>
+    <nav class="admin-nav" aria-label="Admin">{links}
+      <button type="button" class="admin-nav__link privacy-settings" data-analytics-settings>Analytics settings</button>
+    </nav>
     <form class="admin__signout" method="post" action="/logout">
       {csrf_input(request)}
       <button class="btn btn--ghost btn--full" type="submit">Sign out</button>

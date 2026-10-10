@@ -235,14 +235,12 @@ python3 tools/audit.py https://moglifestyle.fit
 Exits non-zero on any failure. Run it after the first deploy and as part of
 every later one.
 
-**On cookie consent.** The store sets two cookies — a signed session and a
-signed cart — both strictly necessary to buy anything, which are exempt from
-consent under GDPR and ePrivacy. Analytics is first-party and cookieless. So no
-consent banner is required today, and `tests/test_launch.py` fails the build if
-a non-essential cookie or a third-party tracker is ever added without one.
-
-If marketing later wants Google Analytics, Meta Pixel or similar, a banner
-becomes mandatory and must block those scripts until consent is given.
+**On cookie consent.** The store's signed session and cart cookies are necessary
+for shopping. Its own traffic reporting is cookieless. The shared Google
+Analytics tag (`G-HVPD9NR41B`) loads only after a visitor selects "Allow
+analytics"; the decision is stored locally in the browser and can be changed
+through "Analytics settings" in the footer. The privacy page explains this.
+Do not add another Google tag to an individual page or enable one through GTM.
 
 ## 10 · Updating
 
