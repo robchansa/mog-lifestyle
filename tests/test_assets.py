@@ -190,7 +190,7 @@ class AdminPhotographyTests(StoreTestCase):
         product = db.one(
             "SELECT * FROM products WHERE slug = 'mens-utility-work-shirt'")
         request = self._staff_request(
-            title="Utility Work Shirt", price_cents="11800", status="active",
+            title="Utility Work Shirt", price="118.00", status="active",
             art_seed="workshirt-0", position="0",
             images="  /static/img/a.jpg  \n\n   \n/static/img/b.jpg\n",
             variants="", csrf_token=request_token(),
@@ -204,7 +204,7 @@ class AdminPhotographyTests(StoreTestCase):
         from app import views_admin
         product = db.one("SELECT * FROM products WHERE slug = 'mog-oversized-tee'")
         request = self._staff_request(
-            title="MOG Oversized Tee", price_cents="6800", status="active",
+            title="MOG Oversized Tee", price="68.00", status="active",
             art_seed="tee-0", position="0", images="", variants="",
             csrf_token=request_token(),
         )

@@ -438,6 +438,44 @@ def admin_order_refund(request: Request, order_id: int) -> Response:
 
 # ---------------------------------------------------------------- products
 
+def _price_value(cents: int | None) -> str:
+    return "" if cents is None else f"{cents // 100}.{cents % 100:02d}"
+
+
+def _read_prices(request: Request) -> dict[str, Any]:
+    def cents(name: str, label: str, optional: bool = False) -> int | None:
+        value = request.get(name)
+        if optional and not value:
+            return None
+        if not re.fullmatch(r"[0-9]{1,6}(?:\.[0-9]{1,2})?", value):
+            raise ValueError(f"{label} must be a dollar amount from 0 to 999999.99, with at most two decimal places.")
+        whole, _, fraction = value.partition(".")
+        return int(whole) * 100 + int(fraction.ljust(2, "0"))
+
+    price = cents("price", "Price")
+    compare = cents("compare_price", "Compare-at price", optional=True)
+    if compare is not None and compare <= price:
+        raise ValueError("Compare-at price must be higher than the selling price, or left blank.")
+    return {"price_cents": price, "compare_cents": compare}
+
+
+def _quick_price_form(request: Request, product: Any) -> str:
+    product_id = product["id"]
+    return f"""
+<form class="product-pricing" method="post" action="/admin/products/{product_id}/price"
+      aria-label="Pricing for {E(product['title'])}">
+  {csrf_input(request)}
+  <label for="price-{product_id}">Price (USD)</label>
+  <input id="price-{product_id}" name="price" type="number" min="0" max="999999.99"
+         step="0.01" required value="{_price_value(product['price_cents'])}">
+  <label for="compare-price-{product_id}">Compare-at (USD, optional)</label>
+  <input id="compare-price-{product_id}" name="compare_price" type="number"
+         min="0" max="999999.99" step="0.01" value="{_price_value(product['compare_cents'])}">
+  <button class="btn btn--small btn--solid" type="submit">Save price</button>
+</form>
+"""
+
+
 @router.get("/admin/products")
 def admin_products(request: Request) -> Response:
     require_staff(request)
@@ -448,9 +486,10 @@ def admin_products(request: Request) -> Response:
          f'<br><span class="muted">{E(p["slug"])}</span>',
          E(p["collection_title"] or "—"),
          badge(p["status"].title(), "paid" if p["status"] == "active" else "muted"),
-         f'<span class="num">{money(p["price_cents"])}</span>',
+         _quick_price_form(request, p),
          f'<span class="num">{p["stock"]}</span>',
-         f'<a class="btn btn--quiet btn--small" href="/product/{E(p["slug"])}">View</a>']
+         f'<div class="product-actions"><a class="btn btn--ghost btn--small" href="/admin/products/{p["id"]}">Edit details</a>'
+         f'<a class="btn btn--quiet btn--small" href="/product/{E(p["slug"])}">View</a></div>']
         for p in rows
     ]
     content = f"""
@@ -458,6 +497,8 @@ def admin_products(request: Request) -> Response:
   <input name="q" value="{E(filters.q)}" placeholder="Search products">
   <button class="btn btn--small btn--ghost" type="submit">Search</button>
 </form>
+<p class="muted">Enter prices in US dollars, for example 29.99. A higher compare-at
+price shows a sale; leave it blank to remove the sale. Use Edit details to update the product.</p>
 <div class="panel">
   <div class="panel__head"><h2>{total} product(s)</h2>
     <a class="btn btn--small btn--solid" href="/admin/products/new">New product</a></div>
@@ -477,10 +518,14 @@ def _product_form(request: Request, product: Any = None,
     variant_text = "\n".join(
         f"{v['sku']} | {v['size']} | {v['color']} | {v['stock']}" for v in variants
     )
+    if request.method == "POST":
+        variant_text = request.get_raw("variants")
     from .art import SHAPES, VARIATIONS
     seeds = [f"{shape}-{i}" for shape in SHAPES for i in range(len(VARIATIONS))]
 
     def value(key: str, fallback: Any = "") -> Any:
+        if request.method == "POST":
+            return request.get_raw(key, str(fallback))
         if product is not None:
             try:
                 return product[key]
@@ -531,11 +576,14 @@ def _product_form(request: Request, product: Any = None,
                     "tools/build_assets.py.")}
       </div>
       {photo_preview}
-      {field("price_cents", "Price (cents)", type_="number",
-             value=str(value("price_cents", 0)), required=True, min="0")}
-      {field("compare_cents", "Compare-at price (cents)", type_="number",
-             value=str(value("compare_cents") or ""), min="0",
-             hint="Leave blank for no sale price.")}
+      {field("price", "Price (USD)", type_="number",
+             value=request.get("price") if request.method == "POST" else _price_value(product["price_cents"] if product else 0),
+             required=True, min="0", max="999999.99", step="0.01",
+             hint="Enter dollars, for example 29.99.")}
+      {field("compare_price", "Compare-at price (USD)", type_="number",
+             value=request.get("compare_price") if request.method == "POST" else _price_value(product["compare_cents"] if product else None),
+             min="0", max="999999.99", step="0.01",
+             hint="Set higher than the selling price to show a sale. Leave blank to remove it.")}
       {field("collection_id", "Collection", value=str(value("collection_id") or ""),
              options=[("", "None")] + [(str(c["id"]), c["title"]) for c in collections])}
       {field("status", "Status", value=value("status", "active"),
@@ -592,15 +640,14 @@ def admin_product_edit(request: Request, product_id: int) -> Response:
 
 
 def _read_product_fields(request: Request) -> dict[str, Any]:
-    compare = request.get("compare_cents")
+    prices = _read_prices(request)
     collection = request.get("collection_id")
     return {
         "title": request.get("title")[:160],
         "subtitle": request.get("subtitle")[:160],
         "description": request.get("description")[:4000],
         "details": request.get("details")[:2000],
-        "price_cents": max(0, request.get_int("price_cents")),
-        "compare_cents": int(compare) if compare.isdigit() else None,
+        **prices,
         "collection_id": int(collection) if collection.isdigit() else None,
         "status": request.get("status", "active"),
         "art_seed": request.get("art_seed", "tee-0"),
@@ -633,7 +680,10 @@ def _parse_variants(raw: str) -> list[dict[str, Any]]:
 @router.post("/admin/products/new")
 def admin_product_create(request: Request) -> Response:
     require_staff(request)
-    fields = _read_product_fields(request)
+    try:
+        fields = _read_product_fields(request)
+    except ValueError as exc:
+        return _product_form(request, None, str(exc))
     if not fields["title"]:
         return _product_form(request, None, "A title is required.")
     fields["slug"] = catalog.unique_slug(fields["title"])
@@ -649,7 +699,10 @@ def admin_product_update(request: Request, product_id: int) -> Response:
     product = catalog.get_product_by_id(product_id)
     if product is None:
         raise HttpError(404, "Product not found.")
-    fields = _read_product_fields(request)
+    try:
+        fields = _read_product_fields(request)
+    except ValueError as exc:
+        return _product_form(request, product, str(exc))
     if not fields["title"]:
         return _product_form(request, product, "A title is required.")
     fields["slug"] = catalog.unique_slug(fields["title"], exclude_id=product_id)
@@ -657,6 +710,23 @@ def admin_product_update(request: Request, product_id: int) -> Response:
     catalog.upsert_variants(product_id, _parse_variants(request.get_raw("variants")))
     audit("product.update", actor=_actor(request), subject=fields["slug"])
     return redirect(f"/admin/products/{product_id}", flash="Product saved.")
+
+
+@router.post("/admin/products/<int:product_id>/price")
+def admin_product_price(request: Request, product_id: int) -> Response:
+    require_staff(request)
+    product = catalog.get_product_by_id(product_id)
+    if product is None:
+        raise HttpError(404, "Product not found.")
+    try:
+        prices = _read_prices(request)
+    except ValueError as exc:
+        return redirect("/admin/products", flash=str(exc), tone="error")
+    catalog.update_product(product_id, **prices)
+    audit("product.price", actor=_actor(request), subject=product["slug"],
+          detail=f"price_cents: {product['price_cents']} -> {prices['price_cents']}; "
+                 f"compare_cents: {product['compare_cents']} -> {prices['compare_cents']}")
+    return redirect("/admin/products", flash=f"Price saved for {product['title']}.")
 
 
 # --------------------------------------------------------------- inventory

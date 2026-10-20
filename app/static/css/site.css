@@ -1152,6 +1152,14 @@ hr { border: 0; border-top: 1px solid var(--hairline); margin: 0; }
 .admin-form { display: grid; gap: 0 1.2rem;
   grid-template-columns: repeat(auto-fit, minmax(min(15rem, 100%), 1fr)); }
 .admin-form .field--wide { grid-column: 1 / -1; }
+.product-pricing { display: grid; gap: .4rem; min-width: 12rem; }
+.product-pricing label { font-size: var(--step--1); color: var(--muted); }
+.product-pricing input {
+  width: 100%; padding: .5rem .6rem; border: 1px solid var(--hairline);
+  background: var(--surface); color: var(--ink); font: inherit;
+}
+.product-pricing .btn { justify-self: start; }
+.product-actions { display: grid; justify-items: start; gap: .5rem; }
 .funnel { display: grid; gap: .55rem; }
 .funnel__step {
   position: relative; display: grid; align-items: center;
