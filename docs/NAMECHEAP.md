@@ -99,27 +99,29 @@ server is not a backup.
 
 ---
 
-## Part 2 · Automatic deploys from GitHub
+## Part 2 · Automatic deploys from GitHub over SSH
 
 After this, every `git push` to `main` runs the test suite and, if it passes,
 puts the new code live. A push that breaks a test never deploys.
 
-### 1. Create a folder-limited deployment account
+### 1. Enable SSH and create a deployment key
 
-cPanel → **FTP Accounts** → **Add FTP Account**:
+cPanel → **SSH Access** (or **Manage Shell Access**) → enable SSH for the
+hosting account. Create an ed25519 key pair locally:
 
-| Field | Value |
-|---|---|
-| Log In | `deploy` |
-| Domain | the hosting account's available domain suffix |
-| Password | a new, unique generated password |
-| Directory | `/home/USER/moglifestyle` |
-| Quota | Unlimited |
+```bash
+ssh-keygen -t ed25519 -C "github-actions-moglifestyle" -f namecheap_mog_deploy
+```
 
-The directory restriction is important: GitHub can replace the application
-code, but it cannot read or change `~/mog-data`, other sites, email, or account
-settings. The workflow uses explicit FTPS, so the password and files are
-encrypted in transit.
+Import `namecheap_mog_deploy.pub` in cPanel → **SSH Access** → **Manage SSH
+Keys**, then authorize it. Keep the private key for the GitHub secret only.
+
+The SSH account must be able to access `/home/USER/moglifestyle`:
+
+The deploy script updates only code directories and release files. A cPanel
+SSH key has the permissions of the hosting account, including access to
+`~/mog-data`; protect the GitHub repository and its deployment secrets.
+The workflow uses SSH with an ed25519 key and a pinned host key.
 
 ### 2. Give GitHub the details
 
@@ -128,16 +130,17 @@ variables** → **Actions** → **New repository secret**, once for each:
 
 | Secret | Value |
 |---|---|
-| `NAMECHEAP_FTP_HOST` | the server hostname from cPanel, e.g. `server123.web-hosting.com` |
-| `NAMECHEAP_FTP_USER` | the complete login shown beside the new FTP account |
-| `NAMECHEAP_FTP_PASSWORD` | the generated deployment-account password |
-| `NAMECHEAP_FTP_TLS_HOST` | optional certificate hostname shown by the shared cPanel server |
+| `NAMECHEAP_SSH_HOST` | server hostname from cPanel, e.g. `server123.web-hosting.com` |
+| `NAMECHEAP_SSH_USER` | SSH username |
+| `NAMECHEAP_SSH_PORT` | `21098` for this hosting account |
+| `NAMECHEAP_SSH_KEY` | contents of the private `namecheap_mog_deploy` key |
+| `NAMECHEAP_APP_PATH` | `/home/hesron/moglifestyle` |
+| `NAMECHEAP_PYTHON` | `/home/hesron/virtualenv/moglifestyle/3.11/bin/python` |
+| `NAMECHEAP_SSH_KNOWN_HOSTS` | trusted host key entry for `[premium339.web-hosting.com]:21098` from the Mac's `~/.ssh/known_hosts` |
 | `SITE_URL` | `https://moglifestyle.fit` |
 
-Port 21 and remote path `/` are the defaults. Only add
-`NAMECHEAP_FTP_PORT` or `NAMECHEAP_FTP_PATH` if the hosting account uses
-different values. If cPanel's FTP hostname is an alias whose TLS certificate
-uses the shared server name, add that server name as `NAMECHEAP_FTP_TLS_HOST`.
+Set all eight secrets above. The host-key secret pins the server identity;
+use the entry already accepted during the successful manual SSH connection.
 
 ### 3. Push
 
@@ -149,8 +152,8 @@ Watch it under the repository's **Actions** tab:
 
 1. **Tests** — the full suite. The upload zip is attached to the run as a
    download.
-2. **Deploy to Namecheap** — connects over encrypted FTPS, verifies the
-   account is rooted at the app folder, mirrors the code and restarts Passenger.
+2. **Deploy to Namecheap** — connects over SSH, mirrors the code with rsync and
+   restarts Passenger.
    The WSGI boot path applies idempotent database migrations before serving.
 3. **Health check** — waits until `https://moglifestyle.fit/healthz` reports the
    commit you just pushed. Green means it is live.
@@ -176,9 +179,9 @@ earlier successful run under **Actions** and choose **Re-run all jobs**.
 | Site works but every page says demo mode | `STRIPE_SECRET_KEY` is empty in `mog.env`. Restart after editing. |
 | Changes to `mog.env` don't apply | Settings are read at start-up: **Setup Python App → Restart**. |
 | Deploy job skipped with a notice | One of the secrets above is missing or misspelled. |
-| "FTP root is not the MOG Python app folder" | The FTP account's directory is wrong, or the first upload has not been completed. It must be `/home/USER/moglifestyle`. |
-| `530 Login authentication failed` | `NAMECHEAP_FTP_USER` must be the complete login cPanel displays, and the GitHub password secret must match the FTP account. |
-| TLS or data-connection timeout | Confirm `NAMECHEAP_FTP_HOST` is the server hostname from cPanel and that FTP Access Control permits GitHub-hosted runners. |
+| Remote app folder is not found | Set `NAMECHEAP_APP_PATH` to `/home/hesron/moglifestyle`. |
+| `Permission denied (publickey)` | Confirm the public key is imported and authorized in cPanel, and that `NAMECHEAP_SSH_USER` is correct. |
+| Host key verification failed | Verify the server fingerprint and update `NAMECHEAP_SSH_KNOWN_HOSTS`. |
 | Health check fails after a green deploy | The app didn't restart: **Setup Python App → Restart**, then open `/healthz`. |
 | Times in reports are off by hours | Set `MOG_TIMEZONE` to the store's timezone, e.g. `America/Boise`. |
 

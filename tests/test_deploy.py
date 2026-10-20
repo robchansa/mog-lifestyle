@@ -451,22 +451,19 @@ class WorkflowTests(StoreTestCase):
         self.assertIn("github.ref == 'refs/heads/main'", self.text)
         self.assertIn("github.event_name != 'pull_request'", self.text)
 
-    def test_it_uses_the_folder_limited_ftps_deployer(self):
-        self.assertIn("python tools/deploy_ftps.py dist/site", self.text)
-        for name in ("NAMECHEAP_FTP_HOST", "NAMECHEAP_FTP_USER",
-                     "NAMECHEAP_FTP_PASSWORD"):
+    def test_it_uses_the_ssh_deployer(self):
+        self.assertIn("python tools/deploy_ssh.py dist/site", self.text)
+        for name in ("NAMECHEAP_SSH_HOST", "NAMECHEAP_SSH_USER",
+                     "NAMECHEAP_SSH_KEY"):
             self.assertIn(name, self.text)
-        self.assertNotIn("NAMECHEAP_SSH_KEY", self.text)
+        self.assertNotIn("NAMECHEAP_FTP_", self.text)
 
     def test_it_restarts_and_then_checks_health(self):
-        deployer = (ROOT / "tools" / "deploy_ftps.py").read_text()
-        self.assertIn('ftp.prot_p()', deployer)
-        self.assertIn('.strip() or "21"', deployer)
-        self.assertIn('ssl.match_hostname(ftp.sock.getpeercert(), tls_host)', deployer)
-        self.assertNotIn('ftp.host = tls_host', deployer)
-        self.assertIn('NAMECHEAP_FTP_TLS_HOST', self.text)
-        self.assertIn('STOR tmp/restart.txt', deployer)
-        self.assertIn('"passenger_wsgi.py", "BUILD.json"', deployer)
+        deployer = (ROOT / "tools" / "deploy_ssh.py").read_text()
+        self.assertIn('StrictHostKeyChecking=yes', deployer)
+        self.assertIn('touch tmp/restart.txt', deployer)
+        self.assertIn('passenger_wsgi.py', deployer)
+        self.assertIn('BUILD.json', deployer)
         self.assertIn('\\"build\\": \\"$want\\"', self.text)
 
     def test_secrets_are_not_echoed(self):

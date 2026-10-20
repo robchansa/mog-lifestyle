@@ -1,14 +1,13 @@
 # Test every push; deploy `main` to Namecheap when the tests pass.
 #
 # One-time setup (repository Settings -> Secrets and variables -> Actions):
-#   NAMECHEAP_FTP_HOST       server hostname from cPanel
-#   NAMECHEAP_FTP_USER       folder-limited FTP account created in cPanel
-#   NAMECHEAP_FTP_PASSWORD   password for that account
-#   NAMECHEAP_FTP_PORT       optional; explicit FTPS defaults to port 21
-#   NAMECHEAP_FTP_TLS_HOST   optional certificate hostname for a shared cPanel
-#                            FTP alias
-#   NAMECHEAP_FTP_PATH       optional; defaults to / because the account is
-#                            rooted at the Python app folder
+#   NAMECHEAP_SSH_HOST       server hostname from cPanel
+#   NAMECHEAP_SSH_USER       SSH username
+#   NAMECHEAP_SSH_KEY        private ed25519 deploy key
+#   NAMECHEAP_SSH_KNOWN_HOSTS verified SSH host key line
+#   NAMECHEAP_APP_PATH       absolute application directory
+#   NAMECHEAP_PYTHON         cPanel virtualenv Python executable
+#   NAMECHEAP_SSH_PORT       optional; defaults to 22
 #   SITE_URL             optional, e.g. https://moglifestyle.fit -- enables
 #                        the post-deploy health check
 # Full walkthrough: docs/NAMECHEAP.md.  Until the secrets exist, pushes still
@@ -59,12 +58,15 @@ jobs:
     steps:
       - id: check
         env:
-          FTP_HOST: ${{ secrets.NAMECHEAP_FTP_HOST }}
-          FTP_USER: ${{ secrets.NAMECHEAP_FTP_USER }}
-          FTP_PASSWORD: ${{ secrets.NAMECHEAP_FTP_PASSWORD }}
+          SSH_HOST: ${{ secrets.NAMECHEAP_SSH_HOST }}
+          SSH_USER: ${{ secrets.NAMECHEAP_SSH_USER }}
+          SSH_KEY: ${{ secrets.NAMECHEAP_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.NAMECHEAP_SSH_KNOWN_HOSTS }}
+          APP_PATH: ${{ secrets.NAMECHEAP_APP_PATH }}
+          PYTHON: ${{ secrets.NAMECHEAP_PYTHON }}
         run: |
           missing=""
-          for name in FTP_HOST FTP_USER FTP_PASSWORD; do
+          for name in SSH_HOST SSH_USER SSH_KEY SSH_KNOWN_HOSTS APP_PATH PYTHON; do
             [ -n "${!name}" ] || missing="$missing NAMECHEAP_$name"
           done
           if [ -n "$missing" ]; then
@@ -81,12 +83,11 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     env:
-      NAMECHEAP_FTP_HOST: ${{ secrets.NAMECHEAP_FTP_HOST }}
-      NAMECHEAP_FTP_PORT: ${{ secrets.NAMECHEAP_FTP_PORT }}
-      NAMECHEAP_FTP_USER: ${{ secrets.NAMECHEAP_FTP_USER }}
-      NAMECHEAP_FTP_PASSWORD: ${{ secrets.NAMECHEAP_FTP_PASSWORD }}
-      NAMECHEAP_FTP_PATH: ${{ secrets.NAMECHEAP_FTP_PATH }}
-      NAMECHEAP_FTP_TLS_HOST: ${{ secrets.NAMECHEAP_FTP_TLS_HOST }}
+      NAMECHEAP_SSH_HOST: ${{ secrets.NAMECHEAP_SSH_HOST }}
+      NAMECHEAP_SSH_PORT: ${{ secrets.NAMECHEAP_SSH_PORT }}
+      NAMECHEAP_SSH_USER: ${{ secrets.NAMECHEAP_SSH_USER }}
+      NAMECHEAP_APP_PATH: ${{ secrets.NAMECHEAP_APP_PATH }}
+      NAMECHEAP_PYTHON: ${{ secrets.NAMECHEAP_PYTHON }}
       SITE_URL: ${{ secrets.SITE_URL }}
     steps:
       - uses: actions/checkout@v4
@@ -97,8 +98,20 @@ jobs:
       - name: Stage the release
         run: python tools/package.py --stage dist/site
 
-      - name: Upload over encrypted FTPS and restart
-        run: python tools/deploy_ftps.py dist/site
+      - name: Upload over SSH and restart
+        env:
+          NAMECHEAP_SSH_KEY_FILE: ${{ runner.temp }}/namecheap_deploy_key
+          DEPLOY_PRIVATE_KEY: ${{ secrets.NAMECHEAP_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.NAMECHEAP_SSH_KNOWN_HOSTS }}
+        run: |
+          umask 077
+          trap 'rm -f "$NAMECHEAP_SSH_KEY_FILE"' EXIT
+          printf '%s\n' "$DEPLOY_PRIVATE_KEY" > "$NAMECHEAP_SSH_KEY_FILE"
+          chmod 600 "$NAMECHEAP_SSH_KEY_FILE"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          python tools/deploy_ssh.py dist/site
 
       - name: Health check
         if: env.SITE_URL != ''

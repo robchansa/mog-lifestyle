@@ -9,6 +9,7 @@ data/
 # Private settings files
 .env
 *.env
+.deploy-keys/
 
 # Build output (python3 tools/package.py)
 dist/
