@@ -824,9 +824,95 @@ def admin_customers(request: Request) -> Response:
   {table(["Customer", "Role", "Orders", "Lifetime", "Marketing", "Joined"],
          customer_rows, empty="No customers yet.")}
 </div>
+{_mailing_list_panel()}
 """
     return html_response(admin_layout(request, content, title="Customers",
                                       active="/admin/customers"))
+
+
+# ------------------------------------------------------------ mailing list
+# Everyone who opted in to marketing email lives in the `newsletter` table,
+# tagged with where they signed up.  Staff export it here to send a drop or
+# the "preorders are open" announcement from their email service.
+
+SUBSCRIBER_SOURCES = {
+    "preorder": "Preorder “Notify Me” (homepage)",
+    "footer": "Footer “Join”",
+    "signup": "Opted in at account sign-up",
+    "account-settings": "Opted in from account settings",
+}
+
+
+def _source_label(source: str) -> str:
+    return SUBSCRIBER_SOURCES.get(source, source or "Unknown")
+
+
+def _mailing_list_panel() -> str:
+    counts = db.query(
+        "SELECT source, count(*) AS n FROM newsletter "
+        "WHERE unsubscribed_at IS NULL GROUP BY source ORDER BY n DESC, source"
+    )
+    total = sum(r["n"] for r in counts)
+    unsubscribed = db.scalar(
+        "SELECT count(*) FROM newsletter WHERE unsubscribed_at IS NOT NULL", (), 0)
+    source_rows = [
+        [E(_source_label(r["source"])), f'<span class="num">{r["n"]}</span>',
+         f'<a class="btn btn--small btn--quiet" '
+         f'href="/admin/subscribers/export?source={E(urllib.parse.quote(r["source"]))}">'
+         f'Export CSV<span class="visually-hidden"> of '
+         f'{E(_source_label(r["source"]))} subscribers</span></a>']
+        for r in counts
+    ]
+    export_all = (
+        '<a class="btn btn--small btn--ghost" href="/admin/subscribers/export">'
+        'Export all subscribers (CSV)</a>' if total else ""
+    )
+    return f"""
+<div class="panel" style="margin-top:2rem" id="mailing-list">
+  <div class="panel__head"><h2>Mailing list — {total} active subscriber(s)</h2>
+    {export_all}</div>
+  {table(["Signed up via", "Active", ""], source_rows, numeric=(1,))
+   if source_rows else ""}
+  <div class="panel__body">
+    {"" if source_rows else '<p class="muted">No one has joined the mailing list yet.</p>'}
+    <p class="panel__note">Exports include active subscribers
+      only{f"; {unsubscribed} unsubscribed address(es) are left out" if unsubscribed else ""}.
+      Every export is recorded in Activity.</p>
+  </div>
+</div>
+"""
+
+
+@router.get("/admin/subscribers/export")
+def admin_subscribers_export(request: Request) -> Response:
+    require_staff(request)
+    source = request.get("source")
+    where, params = "unsubscribed_at IS NULL", []
+    if source:
+        where += " AND source = ?"
+        params.append(source)
+    rows = db.query(
+        f"SELECT email, source, created_at, consent_at FROM newsletter "
+        f"WHERE {where} ORDER BY created_at, id",
+        params,
+    )
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(["email", "source", "signed_up_via", "first_joined_at",
+                     "consent_at"])
+    for r in rows:
+        writer.writerow([csv_safe(cell) for cell in [
+            r["email"], r["source"], _source_label(r["source"]),
+            r["created_at"], r["consent_at"] or "",
+        ]])
+    audit("subscribers.export", actor=_actor(request),
+          detail=f"{len(rows)} rows" + (f", source={source}" if source else ""))
+    suffix = f"-{slugify(source)}" if source else ""
+    return Resp(
+        buffer.getvalue(), content_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition":
+                 f'attachment; filename="mog-subscribers{suffix}.csv"'},
+    )
 
 
 # --------------------------------------------------------------- discounts

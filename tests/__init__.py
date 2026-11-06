@@ -29,5 +29,8 @@ os.environ.setdefault("MOG_TAX_BPS", "0")
 # Explicitly empty: payments run in demo mode, email in console mode.
 os.environ.setdefault("STRIPE_SECRET_KEY", "")
 os.environ.setdefault("SMTP_HOST", "")
+# The site opens in the past, so every suite sees the full store.  The
+# pre-launch countdown gate is tested on its own, in test_preorder.py.
+os.environ.setdefault("MOG_PREORDER_OPENS_AT", "2000-01-01 00:00 UTC")
 
 TMP_DIR = _TMP

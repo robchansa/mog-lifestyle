@@ -5,7 +5,7 @@ import threading
 import time
 import urllib.parse
 
-from . import accounts, analytics, cart as cart_module, db, orders
+from . import accounts, analytics, cart as cart_module, db, orders, preorder
 from .config import config
 from .security import constant_time_equals
 from .web import (
@@ -125,12 +125,20 @@ def create_app() -> Router:
             raise HttpError(403, "Your session expired. Please reload the page and try again.")
         return nxt(request)
 
+    @router.use
+    def launch_gate(request: Request, nxt):
+        """Until preorders open, the public sees only the countdown page."""
+        from .views_preorder import gate
+        return gate(request, nxt)
+
     # -------------------------------------------------------------- routes
     from . import (
-        views_account, views_admin, views_analytics, views_checkout, views_shop,
+        views_account, views_admin, views_analytics, views_checkout,
+        views_preorder, views_shop,
     )
 
     router.include(views_shop.router)
+    router.include(views_preorder.router)
     router.include(views_account.router)
     router.include(views_checkout.router)
     router.include(views_admin.router)
@@ -154,6 +162,8 @@ def create_app() -> Router:
             "payments": "live" if config.payments_live else "demo",
             "email": "smtp" if config.email_live else "console",
             "products": db.scalar("SELECT count(*) FROM products", (), 0),
+            # When the countdown ends, as this server reads it (docs/PREORDER.md).
+            "launch": preorder.launch_status(),
         })
 
     @router.get("/robots.txt")

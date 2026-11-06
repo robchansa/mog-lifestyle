@@ -1018,6 +1018,188 @@ hr { border: 0; border-top: 1px solid var(--hairline); margin: 0; }
   max-width: min(100%, 60rem); margin-top: 2rem; white-space: pre-wrap;
 }
 
+/* ---------------------------------------------------- pre-launch page */
+/* The countdown page the public sees until preorders open
+   (app/views_preorder.py).  It sits over the campaign photograph, so it
+   keeps the dark palette in both colour schemes; the tokens are swapped here
+   once and every button, field and focus ring inside follows. */
+.launch {
+  --ink:      #f4f2ef;
+  --ink-soft: #d8d5d0;
+  --muted:    #b3b0b7;
+  --faint:    #b3b0b7;
+  --hairline: rgba(244, 242, 239, .2);
+  --paper:    #0b0b0c;
+  --surface:  #141417;
+  --raised:   #1b1b1f;
+  --focus:    #f4f2ef;
+  --field-border: #76767c;
+  position: relative; isolation: isolate;
+  min-height: 100vh; min-height: 100svh;
+  display: grid; grid-template-rows: auto 1fr auto;
+  background: var(--paper); color: var(--ink);
+}
+.body--launch { background: #0b0b0c; color-scheme: dark; }
+.launch [hidden] { display: none !important; }
+.launch__media { position: absolute; inset: 0; z-index: -1; overflow: hidden; }
+.launch__media img {
+  width: 100%; height: 100%; object-fit: cover; object-position: 62% 30%;
+  background: #0b0b0c;
+}
+.launch__media::after {
+  content: ""; position: absolute; inset: 0;
+  background:
+    linear-gradient(100deg, rgba(7,7,9,.92) 0%, rgba(7,7,9,.78) 42%,
+                    rgba(7,7,9,.45) 72%, rgba(7,7,9,.62) 100%),
+    linear-gradient(to bottom, rgba(7,7,9,.6) 0%, transparent 25%,
+                    transparent 65%, rgba(7,7,9,.8) 100%);
+}
+.launch__top, .launch__body, .launch__foot {
+  width: 100%; max-width: var(--shell); margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+.launch__top { padding-block: 1.5rem; }
+.launch__top .wordmark { --wordmark-width: clamp(6.5rem, 7vw, 10rem); }
+.launch__body {
+  align-self: center;
+  padding-block: clamp(2.5rem, 6vh, 5rem);
+  display: grid; gap: clamp(2.5rem, 1rem + 5vw, 6rem);
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  align-items: end;
+}
+.launch__foot {
+  display: flex; flex-wrap: wrap; gap: .6rem 1.6rem;
+  justify-content: space-between; align-items: center;
+  padding-block: 1.3rem;
+  border-top: 1px solid var(--hairline);
+  font-size: var(--step--1); color: var(--muted);
+}
+.launch__links { display: flex; flex-wrap: wrap; gap: .4rem 1.4rem; }
+.launch__links a { text-decoration: underline; text-underline-offset: .22em; }
+.launch__links a:hover { color: var(--ink); }
+
+.preorder__eyebrow {
+  display: flex; flex-wrap: wrap; align-items: center; gap: .6rem 1rem;
+}
+.preorder__flag {
+  border: 1px dashed currentColor; color: var(--ink);
+  padding: .32rem .6rem; font-size: .62rem; letter-spacing: .16em;
+  line-height: 1;
+}
+.preorder__title { font-size: var(--step-5); }
+.preorder__lede {
+  color: var(--muted); font-size: var(--step-1);
+  margin-top: 1.1rem; max-width: 40ch;
+}
+.preorder__cta { margin-top: 1.8rem; }
+
+.countdown {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: clamp(1.6rem, 1rem + 2vw, 2.8rem);
+  border-block: 1px solid var(--hairline);
+}
+.countdown__unit {
+  display: grid; gap: .65rem; align-content: start;
+  padding: clamp(1.1rem, .6rem + 1.6vw, 1.9rem) clamp(.5rem, .2rem + 1.4vw, 1.6rem);
+  border-left: 1px solid var(--hairline);
+}
+.countdown__unit:first-child { border-left: 0; padding-left: 0; }
+.countdown__value {
+  font-family: var(--font-display); font-weight: 400;
+  font-size: clamp(2.5rem, 1.2rem + 5.4vw, 6.75rem);
+  line-height: .9; letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums lining-nums;
+  /* Two digits always fit, so a changing number never nudges the layout. */
+  min-width: 2.1ch;
+}
+.countdown__label {
+  font-size: var(--step--1); color: var(--muted);
+  text-transform: uppercase; letter-spacing: var(--tracking-label);
+}
+.preorder__when { margin-top: 1.3rem; color: var(--muted); }
+.preorder__when time { color: var(--ink); }
+.preorder__local { color: var(--muted); font-size: var(--step--1); margin-top: .3rem; }
+.preorder__setting-note {
+  margin-top: 1.2rem; max-width: 52ch;
+  font-size: var(--step--1); color: var(--muted);
+  border-left: 1px solid var(--hairline); padding-left: .9rem;
+}
+.preorder__setting-note code {
+  font-family: var(--font-mono); font-size: .92em; overflow-wrap: anywhere;
+}
+.preorder__setting-note a { text-decoration: underline; text-underline-offset: .22em; }
+
+.preorder__notify {
+  border: 1px solid var(--hairline);
+  background: rgba(11, 11, 12, .72);
+  padding: clamp(1.4rem, 1rem + 2vw, 2.6rem);
+  container-type: inline-size;
+  scroll-margin-top: 1rem;
+}
+.preorder__subhead {
+  font-family: var(--font-display); font-weight: 400;
+  font-size: var(--step-3); line-height: 1; letter-spacing: -.01em;
+}
+.preorder__copy { color: var(--muted); margin-top: .8rem; max-width: 42ch; }
+.preorder-form { margin-top: 1.4rem; }
+.launch .collection-notice { margin: 0; }
+.launch .collection-notice a { text-decoration: underline; text-underline-offset: .2em; }
+/* Field outlines meet 3:1 against their background; :where() keeps this
+   below the focus and error styles, which still win. */
+:where(.launch) .field input { border-color: var(--field-border); }
+
+/* Email input and Notify Me share one line while the panel has room, and
+   stack -- with a full-width button -- when it does not. */
+.field__row { display: flex; flex-wrap: wrap; gap: .5rem; }
+.field__row input { flex: 1 1 10rem; min-width: 0; }
+.field__row .btn { flex: 0 0 auto; }
+@container (max-width: 20rem) {
+  .field__row .btn { flex: 1 1 100%; }
+}
+@media (max-width: 480px) {
+  .field__row .btn { flex: 1 1 100%; }
+}
+.field__error[hidden] { display: none; }
+
+.form-status:not(:empty) {
+  margin-top: 1.2rem; padding: .2rem 0 .2rem 1rem;
+  border-left: 2px solid var(--ink);
+}
+.form-status__message {
+  display: flex; gap: .55rem; align-items: flex-start;
+  font-weight: 500; color: var(--ink);
+}
+.form-status__message .icon { flex: 0 0 auto; margin-top: .2rem; }
+.form-status__note { color: var(--muted); font-size: var(--step--1); margin-top: .35rem; }
+
+@media (max-width: 900px) {
+  .launch__body { grid-template-columns: minmax(0, 1fr); align-self: end; }
+  .preorder__title { font-size: var(--step-4); }
+}
+@media (max-width: 700px) {
+  .launch__media img { object-position: 58% 28%; }
+}
+@media (max-width: 420px) {
+  .countdown__unit { padding-inline: .45rem; }
+  .countdown__label { letter-spacing: .1em; font-size: .64rem; }
+}
+
+/* Staff browsing the hidden site get a reminder above the header. */
+.launch-bar {
+  position: relative; z-index: 120;
+  display: flex; flex-wrap: wrap; gap: .3rem 1.2rem;
+  align-items: center; justify-content: center;
+  padding: .55rem var(--gutter);
+  background: var(--ink); color: var(--paper);
+  font-size: var(--step--1); text-align: center;
+}
+.launch-bar span { display: inline-flex; gap: .45rem; align-items: center; }
+.launch-bar a { text-decoration: underline; text-underline-offset: .22em; }
+.launch-bar a:focus-visible { outline-color: var(--paper); }
+
+/* The default ring is ink-on-ink over the hero photograph; keep it visible. */
+.hero :focus-visible { outline-color: #f4f2ef; }
+
 /* ------------------------------------------------------------ footer */
 .site-footer { border-top: 1px solid var(--hairline); }
 .site-footer__top {

@@ -20,6 +20,7 @@ __all__ = [
     "E", "attrs", "money", "layout", "page_header", "button", "field",
     "product_card", "product_grid", "empty_state", "pagination", "badge",
     "admin_layout", "table", "error_page", "section_label", "icon",
+    "collection_notice",
 ]
 
 
@@ -60,6 +61,38 @@ def money(cents: int | None, *, symbol: bool = True) -> str:
 
 def section_label(text: str, tag: str = "p") -> str:
     return f'<{tag} class="eyebrow">{E(text)}</{tag}>'
+
+
+def collection_notice(kind: str = "general") -> str:
+    """Short plain-language notice shown at or before data collection."""
+    notices = {
+        "newsletter": (
+            "By joining, you agree to receive recurring marketing emails about "
+            "drops, restocks, and training notes. Consent is optional and not "
+            "required to purchase. Unsubscribe any time. See our "
+            '<a href="/privacy">Privacy Policy</a>.'
+        ),
+        "preorder": (
+            "By selecting Notify Me, you agree to receive emails from MOG "
+            "Lifestyle about this preorder, plus drops and restocks. Consent is "
+            "optional and not required to purchase. Unsubscribe any time. See our "
+            '<a href="/privacy">Privacy Policy</a>.'
+        ),
+        "contact": (
+            "We use the information you provide to answer your message and "
+            'provide customer support. See our <a href="/privacy">Privacy Policy</a>.'
+        ),
+        "account": (
+            "We use your name, email, and account details to create and secure "
+            'your account and show your orders. See our <a href="/privacy">Privacy Policy</a>.'
+        ),
+        "checkout": (
+            "We use your email, shipping details, and order information to process "
+            "your order, provide delivery updates, prevent fraud, and meet legal "
+            'obligations. See our <a href="/privacy">Privacy Policy</a>.'
+        ),
+    }
+    return f'<p class="form-note collection-notice">{notices.get(kind, notices["contact"])}</p>'
 
 
 def badge(text: str, tone: str = "neutral") -> str:
@@ -256,6 +289,7 @@ def site_footer(request: Request) -> str:
                placeholder="you@example.com" autocomplete="email">
         <button class="btn btn--solid" type="submit">Join</button>
       </form>
+      {collection_notice("newsletter")}
       <p class="signup__status" data-form-status role="status" aria-live="polite"></p>
     </div>
     <nav class="site-footer__nav" aria-label="Footer">
@@ -345,6 +379,7 @@ def layout(request: Request, content: str, *, title: str = "",
 <script src="{E(static_url("/static/js/analytics.js"))}" defer></script>
 </head>
 <body class="{E(body_class)}">
+{_launch_bar(request) if chrome else ""}
 {site_header(request, active) if chrome else ""}
 {flash_markup}
 <main id="main" tabindex="-1">{content}</main>
@@ -361,6 +396,14 @@ def layout(request: Request, content: str, *, title: str = "",
 </body>
 </html>
 """
+
+
+def _launch_bar(request: Request) -> str:
+    """Staff-only reminder that the public still sees the countdown page."""
+    if getattr(request, "launch_preview", None) is None:
+        return ""
+    from .views_preorder import staff_bar     # local import: it imports this module
+    return staff_bar(request)
 
 
 def _flash(request: Request) -> str:
@@ -443,17 +486,19 @@ def field(name: str, label: str, *, value: str = "", type_: str = "text",
 """
 
 
-def spam_trap() -> str:
+def spam_trap(id_prefix: str = "") -> str:
     """A field no human can see, plus a signed render time.
 
     Hidden from assistive technology and keyboard order as well as from view,
-    so it traps bots without ever reaching a real visitor.
+    so it traps bots without ever reaching a real visitor.  Pass `id_prefix`
+    when a page carries more than one trapped form, so ids stay unique.
     """
     from .security import HONEYPOT_FIELD, TIMESTAMP_FIELD, form_timestamp
+    trap_id = f"{id_prefix}f-{HONEYPOT_FIELD}"
     return (
         f'<div class="spam-trap" aria-hidden="true">'
-        f'<label for="f-{HONEYPOT_FIELD}">Leave this field empty</label>'
-        f'<input id="f-{HONEYPOT_FIELD}" type="text" name="{HONEYPOT_FIELD}"'
+        f'<label for="{trap_id}">Leave this field empty</label>'
+        f'<input id="{trap_id}" type="text" name="{HONEYPOT_FIELD}"'
         f' tabindex="-1" autocomplete="off" value="">'
         f'</div>'
         f'<input type="hidden" name="{TIMESTAMP_FIELD}" value="{E(form_timestamp())}">'

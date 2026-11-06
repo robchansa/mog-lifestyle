@@ -18,3 +18,7 @@ dist/
 __pycache__/
 *.py[cod]
 .DS_Store
+
+# Local only: never publish
+Stripe key/
+.claude/

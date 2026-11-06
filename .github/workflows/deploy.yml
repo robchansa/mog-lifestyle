@@ -121,7 +121,19 @@ jobs:
             body="$(curl -fsS --max-time 20 "${SITE_URL%/}/healthz" || true)"
             if printf '%s' "$body" | grep -q "\"build\": \"$want\""; then
               echo "Live: $SITE_URL is running $want"
-              exit 0
+              # The pre-launch countdown: fail loudly if the live server cannot
+              # read the opening time, since the site would then stay hidden.
+              printf '%s' "$body" | python -c '
+          import json, sys
+          launch = json.load(sys.stdin).get("launch") or {}
+          if not launch.get("readable"):
+              print("::error::The live server cannot read the preorder opening time: "
+                    + str(launch.get("error", "no launch status in /healthz")))
+              sys.exit(1)
+          state = "OPEN" if launch.get("site_open") else "hidden until " + launch["opens_local"]
+          print("Launch: site " + state + " (" + launch["time_zone"] + ")")
+          '
+              exit $?
             fi
             sleep 8
           done

@@ -115,7 +115,11 @@ def register(email: str, password: str, *, name: str = "",
         )
         if marketing_opt_in:
             db.execute(
-                "INSERT OR IGNORE INTO newsletter (email, source) VALUES (?, 'signup')",
+                "INSERT INTO newsletter "
+                "(email, source, consent_at, consent_ip, unsubscribed_at) "
+                "VALUES (?, 'signup', datetime('now'), '', NULL) "
+                "ON CONFLICT(email) DO UPDATE SET source = 'signup', "
+                "consent_at = datetime('now'), unsubscribed_at = NULL",
                 (email,),
             )
     audit("user.register", actor=email, subject=str(user_id))
@@ -181,12 +185,48 @@ def change_password(user_id: int, current: str, replacement: str) -> None:
     audit("user.password_change", actor=user["email"], subject=str(user_id))
 
 
+def subscribe_newsletter(email: str, *, source: str, ip: str = "",
+                         user_agent: str = "") -> None:
+    """Add an address to the marketing list, or renew its consent.
+
+    Shared by the footer "Join" form (source "footer") and the homepage
+    preorder "Notify Me" form (source "preorder").
+    """
+    with db.tx():
+        db.execute(
+            "INSERT INTO newsletter "
+            "(email, source, consent_at, consent_ip, consent_user_agent, unsubscribed_at) "
+            "VALUES (?, ?, datetime('now'), ?, ?, NULL) "
+            "ON CONFLICT(email) DO UPDATE SET source = excluded.source, "
+            "consent_at = datetime('now'), consent_ip = excluded.consent_ip, "
+            "consent_user_agent = excluded.consent_user_agent, "
+            "unsubscribed_at = NULL",
+            (email, source, ip, user_agent),
+        )
+
+
 def update_profile(user_id: int, *, name: str, marketing_opt_in: bool) -> None:
+    user = get_user(user_id)
     with db.tx():
         db.update(
             "users", "id = ?", (user_id,),
             name=name.strip()[:120], marketing_opt_in=1 if marketing_opt_in else 0,
         )
+        if user:
+            if marketing_opt_in:
+                db.execute(
+                    "INSERT INTO newsletter "
+                    "(email, source, consent_at, unsubscribed_at) "
+                    "VALUES (?, 'account-settings', datetime('now'), NULL) "
+                    "ON CONFLICT(email) DO UPDATE SET source = 'account-settings', "
+                    "consent_at = datetime('now'), unsubscribed_at = NULL",
+                    (user["email"],),
+                )
+            else:
+                db.execute(
+                    "UPDATE newsletter SET unsubscribed_at = datetime('now') "
+                    "WHERE email = ?", (user["email"],)
+                )
 
 
 # -------------------------------------------------------------- addresses

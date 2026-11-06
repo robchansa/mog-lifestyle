@@ -10,7 +10,7 @@ from .security import (
 )
 from .ui import (
     E, badge, button, csrf_input, empty_state, field, layout, money,
-    page_header, section_label, spam_trap, table,
+    page_header, section_label, spam_trap, table, collection_notice,
 )
 from .web import HttpError, Request, Response, Router, html_response, redirect
 
@@ -110,6 +110,7 @@ def register_form(request: Request, error: str = "",
       {field("password", "Password", type_="password", required=True,
              autocomplete="new-password",
              hint="At least 10 characters. A short phrase beats a short password.")}
+      {collection_notice("account")}
       <label class="cluster" style="font-size:.8rem;color:var(--muted);margin-bottom:1rem">
         <input type="checkbox" name="marketing_opt_in" value="1"
                {'checked' if values.get('marketing_opt_in') else ''}

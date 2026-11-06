@@ -8,7 +8,7 @@ from .config import config
 from .security import audit, valid_email
 from .ui import (
     E, badge, button, csrf_input, empty_state, field, icon, layout, money,
-    page_header, section_label,
+    page_header, section_label, collection_notice,
 )
 from .views_account import address_fields, validate_address
 from .web import (
@@ -267,6 +267,7 @@ def checkout_page(request: Request, errors: dict | None = None,
 
       <section class="checkout__step">
         <h2>1 · Contact</h2>
+        {collection_notice("checkout")}
         {field("email", "Email", type_="email", required=True, autocomplete="email",
                value=email_value, error=errors.get("email", ""),
                hint="Your receipt and tracking go here.")}

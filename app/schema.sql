@@ -243,7 +243,11 @@ CREATE TABLE IF NOT EXISTS newsletter (
     id         INTEGER PRIMARY KEY,
     email      TEXT NOT NULL UNIQUE COLLATE NOCASE,
     source     TEXT NOT NULL DEFAULT '',
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    consent_at TEXT,
+    consent_ip TEXT NOT NULL DEFAULT '',
+    consent_user_agent TEXT NOT NULL DEFAULT '',
+    unsubscribed_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS messages (

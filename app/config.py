@@ -32,6 +32,23 @@ def _int(name: str, default: int) -> int:
         return default
 
 
+# =========================================================================
+#  PREORDER OPENING — date, time and time zone, in ONE setting.
+#
+#  Format:  "YYYY-MM-DD HH:MM Area/City"   (24-hour clock, IANA time zone)
+#  Example: "2026-11-20 10:00 America/Boise"  = 10:00am Mountain Time
+#
+#  CONFIRMED LAUNCH (moved 2026-11-05): Friday 20 November 2026, 10:00am Mountain
+#  Time.  Until then the public sees only the countdown page; the full site
+#  opens by itself at that moment.
+#
+#  To move it, put MOG_PREORDER_OPENS_AT=... in the server's mog.env
+#  (preferred; no code change) or change the value below.  A time in the
+#  past opens the site immediately.
+# =========================================================================
+PREORDER_OPENS_AT = "2026-11-20 10:00 America/Boise"
+
+
 @lru_cache(maxsize=8)
 def _load_zone(name: str) -> tzinfo | None:
     try:
@@ -76,6 +93,11 @@ class Config:
     store_phone: str = field(
         default_factory=lambda: os.environ.get("MOG_STORE_PHONE", "+1 (208) 206-6706")
     )
+    store_address: str = field(
+        default_factory=lambda: os.environ.get(
+            "MOG_BUSINESS_ADDRESS", "[Business address to be configured before launch]"
+        )
+    )
     currency: str = "usd"
     currency_symbol: str = "$"
     # US-only launch per the brief; flat rate with a free-shipping threshold.
@@ -88,6 +110,28 @@ class Config:
     # follows the store phone number's 208 area code (Idaho, Mountain Time).
     timezone: str = field(
         default_factory=lambda: os.environ.get("MOG_TIMEZONE", "America/Boise")
+    )
+
+    # -- preorder launch -------------------------------------------------
+    # When the countdown ends and the site opens.  See PREORDER_OPENS_AT at
+    # the top of this file for the format and how to change it.
+    preorder_opens_at: str = field(
+        default_factory=lambda: os.environ.get(
+            "MOG_PREORDER_OPENS_AT", PREORDER_OPENS_AT
+        ).strip()
+    )
+    # Where "Shop the preorder" points once the countdown ends.  Empty means
+    # no preorder page exists yet, so no shopping button is shown.  Accepts a
+    # path on this site ("/shop?collection=preorder") or an https:// URL.
+    preorder_url: str = field(
+        default_factory=lambda: os.environ.get("MOG_PREORDER_URL", "").strip()
+    )
+    # "demo": the homepage Notify Me and Create account forms validate input
+    #         and confirm, but save nothing and send nothing.
+    # "live": they use the store's real newsletter list and account system.
+    # Defaults to live in production and demo everywhere else.
+    preorder_forms: str = field(
+        default_factory=lambda: os.environ.get("MOG_PREORDER_FORMS", "").strip().lower()
     )
 
     # -- payments --------------------------------------------------------
@@ -136,6 +180,8 @@ class Config:
         self.base_url = self.base_url.rstrip("/")
         self.database = Path(self.database)
         self.database.parent.mkdir(parents=True, exist_ok=True)
+        if self.preorder_forms not in {"demo", "live"}:
+            self.preorder_forms = "live" if self.is_production else "demo"
 
     # -- derived ---------------------------------------------------------
 

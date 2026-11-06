@@ -80,6 +80,14 @@ It exists only outside production: with `MOG_ENV=production` the seed refuses
 it and the first admin comes from `--create-admin` (see
 [`docs/NAMECHEAP.md`](docs/NAMECHEAP.md)).
 
+### Pre-launch countdown
+
+Until `MOG_PREORDER_OPENS_AT`, the public sees only a countdown page with a
+Notify Me sign-up; the full site opens by itself at that moment, and
+signed-in staff can browse it throughout. See [`docs/PREORDER.md`](docs/PREORDER.md)
+for the format, the confirmed launch (20 November 2026, 10:00 AM Mountain
+Time), and what deploying does. Locally Notify Me runs as a labelled demo that saves nothing.
+
 ### Demo mode
 
 With no `STRIPE_SECRET_KEY` set, checkout completes without charging anything

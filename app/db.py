@@ -120,6 +120,10 @@ ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     ("orders", "refunded_at", "TEXT"),
     ("order_items", "department", "TEXT NOT NULL DEFAULT ''"),
     ("order_items", "on_sale", "INTEGER NOT NULL DEFAULT 0"),
+    ("newsletter", "consent_at", "TEXT"),
+    ("newsletter", "consent_ip", "TEXT NOT NULL DEFAULT ''"),
+    ("newsletter", "consent_user_agent", "TEXT NOT NULL DEFAULT ''"),
+    ("newsletter", "unsubscribed_at", "TEXT"),
 )
 
 

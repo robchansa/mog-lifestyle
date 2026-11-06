@@ -2,16 +2,18 @@
 from __future__ import annotations
 
 import sqlite3
+import urllib.parse
 
 from . import art, catalog, db, mailer
 from .config import config
 from .security import (
     HONEYPOT_FIELD, TIMESTAMP_FIELD, audit, rate_limit, spam_signals,
-    valid_email,
+    sign, unsign, valid_email,
 )
 from .ui import (
     E, badge, button, csrf_input, empty_state, field, icon, layout, money,
     page_header, pagination, product_grid, section_label, spam_trap,
+    collection_notice,
 )
 from .web import HttpError, Request, Response, Router, html_response, json_response, redirect
 
@@ -580,24 +582,57 @@ _POLICY_PAGES = {
                                               "We never see or store your card details."),
     ]),
     "privacy": ("Privacy", "Legal", [
-        ("What we collect", "Your name, email, shipping address and order "
-                            "history. That is all we need to get a package to you."),
-        ("Payments", "Card details are entered on Stripe's own checkout and "
-                     "never touch our servers. We store only a payment reference."),
-        ("Email", "Transactional email is always sent. Marketing email is sent "
-                  "only if you opted in, and every message can unsubscribe you."),
-        ("Cookies and analytics", "We use a signed session cookie and a signed cart "
-         "cookie to run the shop. If you choose Allow analytics, Google Analytics "
-         "may set additional cookies and receive page views and device information "
-         "to help us understand site traffic. The stream can also measure searches, "
-         "scrolls, outbound clicks, form interactions, videos and downloads. "
-         "Our page-view tag removes URL query parameters and referrer queries, "
-         "and we do not intentionally send names, email addresses or checkout "
-         "details to Google Analytics. "
-         "Choose Decline to keep Google Analytics off. You can change your "
-         "choice with Analytics settings in the footer."),
-        ("Your rights", f"Email {config.store_email} to see, correct or delete "
-                        f"the data we hold about you. We respond within thirty days."),
+        ("Who we are", f"MOG Lifestyle is the business responsible for this store. "
+                        f"Business address: {config.store_address}. For privacy questions, "
+                        f"contact {config.store_email} or {config.store_phone}."),
+        ("Information we collect", "We may collect identifiers and contact details "
+         "such as name, email, phone, account credentials, and IP address; shipping "
+         "and billing-related details; order, cart, return, refund, and support history; "
+         "device, browser, approximate location, referrer, and page-view information; "
+         "and marketing preferences. Stripe receives payment details through its hosted "
+         "checkout. Do not send sensitive personal information through contact forms."),
+        ("Sources and purposes", "We collect information directly from you through "
+         "accounts, checkout, contact, newsletter, and support interactions; automatically "
+         "through cookies, server logs, and analytics; and from service providers such as "
+         "Stripe, email, hosting, shipping, fraud-prevention, and customer-support tools. "
+         "We use it to operate the store, process and deliver orders, provide support, "
+         "secure the service, prevent fraud, measure traffic, comply with law, and send "
+         "marketing only where you have opted in."),
+        ("Service providers and disclosures", "We disclose information to vendors that "
+         "help us host the store, process payments, send email, fulfill and track orders, "
+         "prevent fraud, provide support, and measure traffic. Stripe processes payments. "
+         "We do not sell personal information or share it for cross-context behavioral "
+         "advertising, unless this policy is updated and the required opt-out is provided. "
+         "We may disclose information to comply with law, protect rights, or transfer a "
+         "business asset."),
+        ("Cookies and analytics", "Necessary signed session and cart cookies support "
+         "accounts, shopping, security, and checkout. Optional Google Analytics is off "
+         "unless you choose Allow analytics. It may receive page paths, page titles, "
+         "device information, and referrer information. Query strings are removed from "
+         "the page location, and we do not intentionally send names, email addresses, "
+         "order IDs, payment details, or checkout contents to Google Analytics. You can "
+         "Decline or change your choice through Analytics settings."),
+        ("Retention and security", "We retain each category only as long as reasonably "
+         "necessary for the purposes described, including order, tax, accounting, fraud, "
+         "dispute, and legal obligations. Our safeguards include access controls, signed "
+         "sessions, password hashing, CSRF protection, rate limiting, and Stripe-hosted "
+         "payment collection. No method of transmission or storage is guaranteed secure. "
+         "If a reportable security incident occurs, we will follow applicable notice laws."),
+        ("Your privacy choices", "Depending on where you live, you may have rights to "
+         "know/access, correct, delete, or obtain a copy of personal information, and to "
+         "opt out of sale, sharing, targeted advertising, or certain profiling. We honor "
+         "applicable Global Privacy Control signals. California requests may be submitted "
+         f"by emailing {config.store_email}. We may verify identity using information "
+         "already associated with your account or request. We will not discriminate against "
+         "you for exercising a privacy right. If you disagree with a response, reply to "
+         "the decision and request an appeal where required."),
+        ("Children and transfers", "This store is not directed to children under 13, and "
+         "we do not knowingly collect their information. Information may be processed in "
+         "the United States and other locations where our service providers operate."),
+        ("Effective date and changes", "Effective date: October 28, 2026. We may update "
+         "this policy as the store, vendors, or law changes. The updated version will be "
+         "posted here with a new effective date. If a change materially affects your rights, "
+         "we will provide additional notice when required."),
     ]),
     "terms": ("Terms", "Legal", [
         ("Orders", "An order is an offer to buy. We accept it when we take "
@@ -656,6 +691,7 @@ def contact_form(request: Request, errors: dict | None = None,
     <form method="post" action="/contact" class="stack">
       {csrf_input(request)}
       {spam_trap()}
+      {collection_notice("contact")}
       {f'<div class="form-error">{E(errors["_"])}</div>' if errors.get("_") else ""}
       <div class="field-row">
         {field("name", "Your name", required=True, autocomplete="name",
@@ -744,15 +780,30 @@ def newsletter(request: Request) -> Response:
               detail="trap", ip=request.remote_addr)
         message, ok = "You're on the list.", True        # silent to the bot
     else:
-        from . import db as database
-        with database.tx():
-            database.execute(
-                "INSERT OR IGNORE INTO newsletter (email, source) VALUES (?, 'footer')",
-                (email,),
-            )
+        from .accounts import subscribe_newsletter
+        subscribe_newsletter(email, source="footer", ip=request.remote_addr,
+                             user_agent=request.headers.get("User-Agent", ""))
         message, ok = "You're on the list.", True
 
     if request.wants_json:
         return json_response({"ok": ok, "message": message})
     return redirect(request.headers.get("Referer", "/"), flash=message,
                     tone="ok" if ok else "error")
+
+
+@router.get("/newsletter/unsubscribe")
+def newsletter_unsubscribe(request: Request) -> Response:
+    """One-click unsubscribe endpoint for future commercial email links."""
+    email = unsign(request.get("token"))
+    if email and valid_email(email):
+        with db.tx():
+            db.execute(
+                "UPDATE newsletter SET unsubscribed_at = datetime('now') "
+                "WHERE email = ?", (email,)
+            )
+            db.execute(
+                "UPDATE users SET marketing_opt_in = 0 WHERE email = ?", (email,)
+            )
+        audit("newsletter.unsubscribe", actor=email, subject="newsletter",
+              ip=request.remote_addr)
+    return redirect("/", flash="You have been unsubscribed from marketing email.")
