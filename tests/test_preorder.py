@@ -211,6 +211,23 @@ class LaunchStatusTests(unittest.TestCase):
         self.assertEqual(status["seconds_left"], 14 * 86400)
         self.assertFalse(status["site_open"])
 
+    def test_a_process_reports_the_build_it_started_with(self):
+        """Read at start-up, so an old process mid-restart cannot claim the new build."""
+        from app import application
+        original = application._BUILD
+        try:
+            application._BUILD = None
+            application.create_app()
+            self.assertIsNotNone(application._BUILD)
+        finally:
+            application._BUILD = original
+
+    def test_the_deploy_waits_for_the_new_code_itself(self):
+        from pathlib import Path
+        workflow = (Path(__file__).resolve().parent.parent
+                    / ".github" / "workflows" / "deploy.yml").read_text()
+        self.assertIn("grep -q '\"launch\"'", workflow)
+
     def test_the_deploy_fails_if_the_live_server_cannot_read_it(self):
         from pathlib import Path
         workflow = (Path(__file__).resolve().parent.parent

@@ -117,9 +117,14 @@ jobs:
         if: env.SITE_URL != ''
         run: |
           want="${GITHUB_SHA::12}"
-          for attempt in 1 2 3 4 5 6 7 8; do
+          # Namecheap can take a few minutes to switch processes after a restart.
+          for attempt in $(seq 1 24); do
             body="$(curl -fsS --max-time 20 "${SITE_URL%/}/healthz" || true)"
-            if printf '%s' "$body" | grep -q "\"build\": \"$want\""; then
+            # Wait for the new code itself: it reports the new build *and* the
+            # launch section, so an old process still finishing is not mistaken
+            # for the new release.
+            if printf '%s' "$body" | grep -q "\"build\": \"$want\"" \
+               && printf '%s' "$body" | grep -q '"launch"'; then
               echo "Live: $SITE_URL is running $want"
               # The pre-launch countdown: fail loudly if the live server cannot
               # read the opening time, since the site would then stay hidden.
@@ -137,5 +142,5 @@ jobs:
             fi
             sleep 8
           done
-          echo "::error::$SITE_URL/healthz did not report build $want. Last response: $body"
+          echo "::error::$SITE_URL/healthz did not report build $want with its launch status. Last response: $body"
           exit 1

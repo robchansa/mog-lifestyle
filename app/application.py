@@ -22,6 +22,11 @@ PRIVATE_PREFIXES = ("/admin", "/account")
 
 
 def create_app() -> Router:
+    # Read BUILD.json now, as the process starts, so /healthz always reports
+    # the build this process is actually running.  Read lazily, an old process
+    # still serving during a restart would report the newly uploaded build
+    # while running the previous code.
+    build_info()
     router = Router()
 
     # ---------------------------------------------------------- middleware
