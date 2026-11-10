@@ -315,6 +315,7 @@ def site_footer(request: Request) -> str:
         <a href="/privacy">Privacy</a>
         <a href="/terms">Terms</a>
         <button type="button" class="privacy-settings" data-analytics-settings>Analytics settings</button>
+        <a href="/?ad_settings=1">Ad measurement choices</a>
       </div>
     </nav>
   </div>
@@ -352,6 +353,20 @@ def layout(request: Request, content: str, *, title: str = "",
     extra_scripts = "".join(
         f'<script src="{E(static_url(src))}" defer></script>' for src in scripts
     )
+    # Meta is limited to the public homepage; never load it on account,
+    # checkout, contact, search, or admin pages containing private details.
+    meta_script = ('<script src="' + E(static_url('/static/js/meta.js')) + '" defer></script>'
+                   if request.path == "/" else "")
+    meta_choice = ('''<aside class="analytics-consent" data-meta-consent hidden aria-label="Ad measurement choice">
+  <p>May we use Meta to measure this page visit and a successful preorder signup?
+  Meta receives browser/device identifiers and may use advertising cookies.
+  We do not send your email address. Your choice does not affect signing up.
+  <a href="/privacy">Privacy details</a>.</p>
+  <div class="analytics-consent__actions">
+    <button class="btn btn--solid" type="button" data-meta-accept>Allow ad measurement</button>
+    <button class="btn btn--ghost" type="button" data-meta-reject>Decline ad measurement</button>
+  </div>
+</aside>''' if request.path == "/" else "")
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -377,6 +392,7 @@ def layout(request: Request, content: str, *, title: str = "",
 <link rel="stylesheet" href="{E(static_url("/static/css/site.css"))}">
 {structured}
 <script src="{E(static_url("/static/js/analytics.js"))}" defer></script>
+{meta_script}
 </head>
 <body class="{E(body_class)}">
 {_launch_bar(request) if chrome else ""}
@@ -391,6 +407,7 @@ def layout(request: Request, content: str, *, title: str = "",
     <button class="btn btn--ghost" type="button" data-analytics-reject>Decline</button>
   </div>
 </aside>
+{meta_choice}
 <script src="{E(static_url("/static/js/site.js"))}" defer></script>
 {extra_scripts}
 </body>

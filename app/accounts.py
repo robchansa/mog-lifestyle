@@ -186,13 +186,14 @@ def change_password(user_id: int, current: str, replacement: str) -> None:
 
 
 def subscribe_newsletter(email: str, *, source: str, ip: str = "",
-                         user_agent: str = "") -> None:
+                         user_agent: str = "") -> bool:
     """Add an address to the marketing list, or renew its consent.
 
     Shared by the footer "Join" form (source "footer") and the homepage
     preorder "Notify Me" form (source "preorder").
     """
     with db.tx():
+        previous = db.one("SELECT unsubscribed_at FROM newsletter WHERE email = ?", (email,))
         db.execute(
             "INSERT INTO newsletter "
             "(email, source, consent_at, consent_ip, consent_user_agent, unsubscribed_at) "
@@ -203,6 +204,7 @@ def subscribe_newsletter(email: str, *, source: str, ip: str = "",
             "unsubscribed_at = NULL",
             (email, source, ip, user_agent),
         )
+        return previous is None or previous["unsubscribed_at"] is not None
 
 
 def update_profile(user_id: int, *, name: str, marketing_opt_in: bool) -> None:
