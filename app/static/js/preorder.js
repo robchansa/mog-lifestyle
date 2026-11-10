@@ -228,6 +228,11 @@
     }
 
     function succeed(data) {
+      if (data.meta_event_id && typeof window.CustomEvent === "function") {
+        document.dispatchEvent(new CustomEvent("mog:preorder-signup", {
+          detail: { eventId: data.meta_event_id }
+        }));
+      }
       form.reset();
       inputs.forEach(function (input) { setError(input, ""); });
       if (!status) return;
