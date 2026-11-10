@@ -15,20 +15,25 @@
     choice = value;
     try { window.localStorage.setItem(key, value); } catch (_) { /* session only */ }
   }
-  function safePage() {
-    if (!/^(www\.)?moglifestyle\.fit$/.test(location.hostname) || location.pathname !== "/") return false;
+  function safeQuery(search) {
     var allowed = /^(utm_source|utm_medium|utm_campaign|utm_content|utm_term|fbclid|ad_settings|view)$/;
     var safe = true;
-    new URLSearchParams(location.search).forEach(function (_, name) {
+    new URLSearchParams(search).forEach(function (_, name) {
       if (!allowed.test(name)) safe = false;
     });
-    // Meta reads document.referrer itself. Do not load it when a previous
-    // same-site private page, or a query-bearing referrer, could leak details.
+    return safe;
+  }
+  function safePage() {
+    if (!/^(www\.)?moglifestyle\.fit$/.test(location.hostname) || location.pathname !== "/") return false;
+    var safe = safeQuery(location.search);
+    // Allow the public countdown and consent links to refer to one another.
+    // Continue blocking private paths, unknown query fields and external queries.
     if (document.referrer) {
       try {
         var previous = new URL(document.referrer);
-        if (previous.search || (previous.origin === location.origin &&
-            !/^(\/|\/privacy|\/about)$/.test(previous.pathname))) safe = false;
+        if (previous.origin === location.origin) {
+          if (!/^(\/|\/privacy|\/about)$/.test(previous.pathname) || !safeQuery(previous.search)) safe = false;
+        } else if (previous.search) safe = false;
       } catch (_) { safe = false; }
     }
     return safe;
