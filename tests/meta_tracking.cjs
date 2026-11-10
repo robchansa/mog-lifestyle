@@ -74,6 +74,7 @@ for (const options of [
   {location: {search: '?email=private@example.com'}},
   {referrer: 'https://moglifestyle.fit/admin/customers'},
   {referrer: 'https://moglifestyle.fit/?email=private@example.com'},
+  {referrer: 'https://example.com/?email=private@example.com'},
   {navigator: {globalPrivacyControl: true}},
   {navigator: {doNotTrack: '1'}}
 ]) {
@@ -94,4 +95,15 @@ x = boot({storage: {mog_meta_consent_v1: 'yes'}, location: {search: '?utm_source
 assert.equal(x.scripts.length, 1);
 x = boot({storage: {mog_meta_consent_v1: 'no'}, location: {search: '?ad_settings=1'}});
 assert.equal(x.panel.hidden, false);
+for (const referrer of [
+  'https://moglifestyle.fit/?view=countdown',
+  'https://moglifestyle.fit/?ad_settings=1',
+  'https://moglifestyle.fit/?utm_source=instagram&fbclid=example'
+]) {
+  x = boot({referrer, location: {search: '?ad_settings=1'}});
+  assert.equal(x.scripts.length, 0);
+  x.handlers.accept();
+  assert.equal(x.scripts.length, 1);
+  assert.equal(x.calls().filter(c => c[1] === 'PageView').length, 1);
+}
 console.log('Meta tracking behavioral tests passed');
