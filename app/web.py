@@ -493,10 +493,10 @@ def _security_headers() -> dict[str, str]:
         "Permissions-Policy": "geolocation=(), microphone=(), camera=(), payment=(self)",
         "Content-Security-Policy": (
             "default-src 'self'; "
-            "img-src 'self' data: https://www.google-analytics.com https://region1.google-analytics.com; "
+            "img-src 'self' data: https://www.google-analytics.com https://region1.google-analytics.com https://www.facebook.com; "
             "style-src 'self' 'unsafe-inline'; "
-            "script-src 'self' https://www.googletagmanager.com; "
-            "connect-src 'self' https://www.google-analytics.com https://region1.google-analytics.com; "
+            "script-src 'self' https://www.googletagmanager.com https://connect.facebook.net; "
+            "connect-src 'self' https://www.google-analytics.com https://region1.google-analytics.com https://www.facebook.com https://connect.facebook.net; "
             "form-action 'self' https://checkout.stripe.com; "
             "frame-ancestors 'none'; "
             "base-uri 'self'; "

@@ -601,8 +601,10 @@ _POLICY_PAGES = {
         ("Service providers and disclosures", "We disclose information to vendors that "
          "help us host the store, process payments, send email, fulfill and track orders, "
          "prevent fraud, provide support, and measure traffic. Stripe processes payments. "
-         "We do not sell personal information or share it for cross-context behavioral "
-         "advertising, unless this policy is updated and the required opt-out is provided. "
+         "We do not sell personal information. If you separately allow Meta ad "
+         "measurement, Meta receives the limited data described below; this may be "
+         "considered sharing or targeted advertising under applicable privacy laws. "
+         "You can decline or withdraw that permission through Ad measurement choices. "
          "We may disclose information to comply with law, protect rights, or transfer a "
          "business asset."),
         ("Cookies and analytics", "Necessary signed session and cart cookies support "
@@ -612,6 +614,17 @@ _POLICY_PAGES = {
          "the page location, and we do not intentionally send names, email addresses, "
          "order IDs, payment details, or checkout contents to Google Analytics. You can "
          "Decline or change your choice through Analytics settings."),
+        ("Meta ad measurement", "Optional Meta Pixel measurement is off until you "
+         "select Allow ad measurement, separately from Google Analytics. On the public "
+         "homepage it sends a page-view event and, after a new preorder notification "
+         "signup is successfully saved, a Lead event. Meta may receive the page URL, "
+         "referrer, IP address, browser/device information and advertising-cookie "
+         "identifiers to measure ads. We do not send the signup email address or enable "
+         "email-address matching. Tracking does not load on account, checkout, contact, "
+         "search or admin pages. Decline ad measurement or use Ad measurement choices "
+         "to withdraw permission; this does not affect signing up or shopping. Global "
+         "Privacy Control and Do Not Track signals disable this Meta integration. "
+         "Meta handles received data under its own privacy policy at facebook.com/privacy/policy."),
         ("Retention and security", "We retain each category only as long as reasonably "
          "necessary for the purposes described, including order, tax, accounting, fraud, "
          "dispute, and legal obligations. Our safeguards include access controls, signed "
@@ -629,7 +642,7 @@ _POLICY_PAGES = {
         ("Children and transfers", "This store is not directed to children under 13, and "
          "we do not knowingly collect their information. Information may be processed in "
          "the United States and other locations where our service providers operate."),
-        ("Effective date and changes", "Effective date: October 28, 2026. We may update "
+        ("Effective date and changes", "Effective date: November 7, 2026. We may update "
          "this policy as the store, vendors, or law changes. The updated version will be "
          "posted here with a new effective date. If a change materially affects your rights, "
          "we will provide additional notice when required."),

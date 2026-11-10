@@ -22,6 +22,7 @@ See docs/PREORDER.md.
 from __future__ import annotations
 
 from typing import Any
+from uuid import uuid4
 
 from . import accounts, preorder
 from .config import config
@@ -221,7 +222,7 @@ def countdown_page(request: Request, cd: preorder.Countdown,
   <footer class="launch__foot">
     <span>© 2026 MOG Lifestyle</span>
     <nav class="launch__links" aria-label="Footer">
-      <a href="/privacy">Privacy</a>{social}
+      <a href="/privacy">Privacy</a><a href="/?ad_settings=1">Ad measurement choices</a>{social}
     </nav>
   </footer>
 </div>
@@ -272,17 +273,19 @@ def notify_submit(request: Request) -> Response:
 
     note = "" if live else DEMO_NOTE_NOTIFY
     signal = spam_signals(request.get(HONEYPOT_FIELD), request.get_raw(TIMESTAMP_FIELD))
+    new_signup = False
     if signal:
         # Answer a bot exactly as a person, so it learns nothing.
         if live:
             audit("spam.blocked", actor=email, subject="preorder-notify",
                   detail=signal, ip=request.remote_addr)
     elif live:
-        accounts.subscribe_newsletter(
+        new_signup = accounts.subscribe_newsletter(
             email, source="preorder", ip=request.remote_addr,
             user_agent=request.headers.get("User-Agent", ""),
         )
     if request.wants_json:
         return json_response({"ok": True, "note": note,
+                              "meta_event_id": uuid4().hex if new_signup else "",
                               "message": NOTIFY_DONE.format(email=email)})
     return redirect("/#notify", flash=f"{NOTIFY_DONE_SHORT} {note}".strip())
